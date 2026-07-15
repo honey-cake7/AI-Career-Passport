@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model, Types } from 'mongoose';
+import { nanoid } from 'nanoid';
 
 // ─── Sub-document Interfaces ─────────────────────────────────
 
@@ -37,6 +38,7 @@ export interface IProfile extends Document {
   experiences: IExperience[];
   education: IEducation[];
   skills: string[]; // Strictly normalized canonical skill names
+  slug: string; // Public sharing link
   rawResumeText?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -106,6 +108,12 @@ const ProfileSchema = new Schema<IProfile>(
     skills: {
       type: [String],
       default: [],
+    },
+    slug: {
+      type: String,
+      unique: true,
+      index: true,
+      default: () => nanoid(10),
     },
     rawResumeText: {
       type: String,

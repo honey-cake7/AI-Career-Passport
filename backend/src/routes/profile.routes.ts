@@ -5,6 +5,8 @@ import { extractTextFromPdf } from '../services/pdfParser.service.js';
 import { extractProfileFromText } from '../services/profileExtractor.service.js';
 import { normalizeSkillsFromResume } from '../services/skillNormalizer.service.js';
 import { Profile } from '../models/Profile.js';
+import { optimizeProfileForJob } from '../services/profileOptimizer.service.js';
+import { generateProfilePdf } from '../services/pdfGenerator.service.js';
 
 // ─── Multer Configuration ────────────────────────────────────
 
@@ -103,6 +105,7 @@ router.post('/upload', upload.single('resume'), async (req: Request, res: Respon
       success: true,
       data: {
         profileId: profile._id,
+        slug: profile.slug,
         personalInfo: profile.personalInfo,
         experiences: profile.experiences,
         education: profile.education,
@@ -127,6 +130,95 @@ router.post('/upload', upload.single('resume'), async (req: Request, res: Respon
       success: false,
       error: error instanceof Error ? error.message : 'An unexpected error occurred',
     });
+  }
+});
+
+/**
+ * POST /api/profile/:profileId/optimize
+ * 
+ * Takes a jobDescription in the body and returns an AI-generated optimization matrix.
+ */
+router.post('/:profileId/optimize', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { profileId } = req.params;
+    const { jobDescription } = req.body;
+
+    if (!jobDescription) {
+      res.status(400).json({ success: false, error: 'jobDescription is required in the body' });
+      return;
+    }
+
+    const profile = await Profile.findById(profileId);
+    if (!profile) {
+      res.status(404).json({ success: false, error: 'Profile not found' });
+      return;
+    }
+
+    const optimizationMatrix = await optimizeProfileForJob(profile, jobDescription);
+    
+    res.status(200).json({
+      success: true,
+      data: optimizationMatrix,
+    });
+  } catch (error) {
+    console.error('❌ Profile optimization failed:', error);
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Server error' });
+  }
+});
+
+/**
+ * GET /api/profile/:profileId/export
+ * 
+ * Generates and downloads a binary PDF of the profile.
+ */
+router.get('/:profileId/export', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { profileId } = req.params;
+    const profile = await Profile.findById(profileId);
+    
+    if (!profile) {
+      res.status(404).json({ success: false, error: 'Profile not found' });
+      return;
+    }
+
+    const pdfBuffer = await generateProfilePdf(profile);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${profile.personalInfo.fullName.replace(/\s+/g, '_')}_Resume.pdf"`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('❌ PDF export failed:', error);
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Server error' });
+  }
+});
+
+/**
+ * GET /api/profile/public/:slug
+ * 
+ * Public read-only endpoint for viewing a profile via its shareable URL.
+ */
+router.get('/public/:slug', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { slug } = req.params;
+    const profile = await Profile.findOne({ slug });
+
+    if (!profile) {
+      res.status(404).json({ success: false, error: 'Profile not found' });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        personalInfo: profile.personalInfo,
+        experiences: profile.experiences,
+        education: profile.education,
+        skills: profile.skills,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Fetching public profile failed:', error);
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Server error' });
   }
 });
 
