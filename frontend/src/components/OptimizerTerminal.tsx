@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Terminal, Cpu, Target, AlertTriangle, ArrowRight, Loader2, ChevronDown } from 'lucide-react';
 import type { IOptimizationResult } from '../types';
-import axios from 'axios';
+import { apiClient } from '../api/axios';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface OptimizerTerminalProps {
@@ -81,7 +81,7 @@ export const OptimizerTerminal: React.FC<OptimizerTerminalProps> = ({ profileId 
     setResult(null);
 
     try {
-      const response = await axios.post(`http://localhost:3001/api/profile/${profileId}/optimize`, {
+      const response = await apiClient.post(`/api/profile/${profileId}/optimize`, {
         jobDescription
       });
       if (response.data.success) {

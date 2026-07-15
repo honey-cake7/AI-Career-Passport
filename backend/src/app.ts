@@ -6,7 +6,15 @@ const app = express();
 
 // ─── Global Middleware ───────────────────────────────────────
 
-app.use(cors());
+const allowedOrigins = [
+  'http://localhost:5173',
+  process.env.FRONTEND_URL
+].filter(Boolean) as string[];
+
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -19,8 +27,8 @@ app.use('/api/profile', profileRoutes);
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
+    timestamp: Date.now(),
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 

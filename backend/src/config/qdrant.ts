@@ -4,12 +4,14 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
+const QDRANT_API_KEY = process.env.QDRANT_API_KEY || undefined;
 
 /**
  * Singleton Qdrant client instance.
  */
 export const qdrantClient = new QdrantClient({
   url: QDRANT_URL,
+  ...(QDRANT_API_KEY && { apiKey: QDRANT_API_KEY }),
 });
 
 /** The name of the Qdrant collection for the skill taxonomy. */

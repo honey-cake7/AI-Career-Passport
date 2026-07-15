@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Download, Link as LinkIcon, CheckCircle2, Paintbrush } from 'lucide-react';
+import { API_BASE_URL } from '../api/axios';
 
 interface ExportControlsProps {
   profileId: string;
@@ -11,7 +12,7 @@ export const ExportControls: React.FC<ExportControlsProps> = ({ profileId, slug 
   const [theme, setTheme] = useState('modern');
 
   const handleCopyLink = () => {
-    const url = `http://localhost:3001/api/profile/public/${slug}`;
+    const url = `${API_BASE_URL}/api/profile/public/${slug}`;
     navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -19,7 +20,7 @@ export const ExportControls: React.FC<ExportControlsProps> = ({ profileId, slug 
 
   const handleDownload = () => {
     // Open the download link directly to trigger the browser's save file prompt
-    window.open(`http://localhost:3001/api/profile/${profileId}/export?theme=${theme}`, '_blank');
+    window.open(`${API_BASE_URL}/api/profile/${profileId}/export?theme=${theme}`, '_blank');
   };
 
   return (

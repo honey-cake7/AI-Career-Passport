@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { UploadCloud, FileText, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import axios from 'axios';
+import { apiClient } from '../api/axios';
 import type { IProfile } from '../types';
 
 interface ResumeUploadProps {
@@ -56,7 +56,7 @@ export const ResumeUpload: React.FC<ResumeUploadProps> = ({ onUploadSuccess }) =
     formData.append('userId', '507f1f77bcf86cd799439011'); // Dummy user ID
 
     try {
-      const response = await axios.post('http://localhost:3001/api/profile/upload', formData, {
+      const response = await apiClient.post('/api/profile/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
