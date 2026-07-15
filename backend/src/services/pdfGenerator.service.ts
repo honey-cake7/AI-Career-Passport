@@ -16,7 +16,7 @@ export async function generateProfilePdf(profile: IProfile): Promise<Buffer> {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', (err) => reject(err));
 
-      const { personalInfo, experiences, education, skills } = profile;
+      const { personalInfo, experiences, projects, education, skills } = profile;
 
       // ─── Header: Personal Info ──────────────────────────
       doc.font('Helvetica-Bold').fontSize(24).text(personalInfo.fullName, { align: 'center' });
@@ -72,6 +72,33 @@ export async function generateProfilePdf(profile: IProfile): Promise<Buffer> {
           if (exp.description) {
             doc.moveDown(0.25);
             doc.font('Helvetica').fontSize(10).text(exp.description);
+          }
+          doc.moveDown(1);
+        });
+      }
+
+      // ─── Projects ───────────────────────────────────────
+      if (projects && projects.length > 0) {
+        doc.font('Helvetica-Bold').fontSize(14).text('Projects');
+        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+        doc.moveDown(0.5);
+
+        projects.forEach(proj => {
+          doc.font('Helvetica-Bold').fontSize(12).text(proj.title, { continued: proj.link ? true : false });
+          if (proj.link) {
+            doc.font('Helvetica').fontSize(10).fillColor('blue')
+               .text(`  (${proj.link})`, { link: proj.link, underline: true });
+            doc.fillColor('black'); // Reset
+          }
+
+          if (proj.techStack && proj.techStack.length > 0) {
+            doc.font('Helvetica-Oblique').fontSize(10).fillColor('gray').text(proj.techStack.join(', '));
+            doc.fillColor('black'); // Reset
+          }
+
+          if (proj.description) {
+            doc.moveDown(0.25);
+            doc.font('Helvetica').fontSize(10).text(proj.description);
           }
           doc.moveDown(1);
         });

@@ -1,7 +1,11 @@
 import React from 'react';
-import { Cpu, Wifi } from 'lucide-react';
+import { Cpu, Wifi, LogOut } from 'lucide-react';
 
-export const Navbar: React.FC = () => {
+interface NavbarProps {
+  onClearProfile?: () => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({ onClearProfile }) => {
   return (
     <nav className="fixed top-0 left-0 right-0 h-20 glass-panel border-x-0 border-t-0 rounded-none z-50 px-8 flex items-center justify-between">
       <div className="flex items-center gap-3">
@@ -24,7 +28,18 @@ export const Navbar: React.FC = () => {
           </div>
           <span className="text-sm font-medium text-slate-300">System Online</span>
         </div>
-        <Wifi className="w-5 h-5 text-slate-500" />
+        
+        {onClearProfile && (
+          <button 
+            onClick={onClearProfile}
+            className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-full border border-red-500/20 transition-colors text-sm font-medium ml-2"
+          >
+            <LogOut className="w-4 h-4" />
+            Reset
+          </button>
+        )}
+        
+        <Wifi className="w-5 h-5 text-slate-500 hidden sm:block" />
       </div>
     </nav>
   );

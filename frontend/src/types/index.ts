@@ -25,6 +25,13 @@ export interface IEducation {
   gpa?: string;
 }
 
+export interface IProject {
+  title: string;
+  description?: string;
+  techStack: string[];
+  link?: string;
+}
+
 export interface IProfile {
   _id: string;
   profileId?: string;
@@ -32,6 +39,7 @@ export interface IProfile {
   personalInfo: IPersonalInfo;
   experiences: IExperience[];
   education: IEducation[];
+  projects: IProject[];
   skills: string[];
 }
 

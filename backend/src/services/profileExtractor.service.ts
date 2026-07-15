@@ -1,10 +1,11 @@
 import { groqClient, GROQ_MODEL } from '../config/groq.js';
-import type { IPersonalInfo, IExperience, IEducation } from '../models/Profile.js';
+import type { IPersonalInfo, IExperience, IEducation, IProject } from '../models/Profile.js';
 
 export interface ExtractedProfile {
   personalInfo: IPersonalInfo;
   experiences: IExperience[];
   education: IEducation[];
+  projects: IProject[];
 }
 
 /**
@@ -47,12 +48,21 @@ The JSON must follow this exact schema:
       "endDate": "string or null",
       "gpa": "string or null"
     }
+  ],
+  "projects": [
+    {
+      "title": "string (required)",
+      "description": "string or null (responsibilities/achievements)",
+      "techStack": ["string", "string"],
+      "link": "string or null (e.g., GitHub or live URL)"
+    }
   ]
 }
 
 Rules:
-- Extract ALL experiences and education entries found.
-- If a field is not found in the text, set it to null.
+- Extract ALL experiences, education entries, and academic/personal/open-source projects found.
+- For projects, carefully identify the tech stack and return it as an array of strings.
+- If a field is not found in the text, set it to null (except arrays, which should be empty).
 - Do NOT invent or hallucinate information not present in the text.
 - For dates, use the format as-is from the resume (e.g., "Jan 2020", "2020", "Present").
 - fullName is required. If you cannot determine a name, use "Unknown".`;
@@ -93,6 +103,7 @@ Rules:
       personalInfo: parsed.personalInfo,
       experiences: Array.isArray(parsed.experiences) ? parsed.experiences : [],
       education: Array.isArray(parsed.education) ? parsed.education : [],
+      projects: Array.isArray(parsed.projects) ? parsed.projects : [],
     };
   } catch (parseError) {
     console.error('Failed to parse LLM profile extraction response:', content);

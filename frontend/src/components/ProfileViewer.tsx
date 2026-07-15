@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Phone, MapPin, Briefcase, GraduationCap, CheckCircle2, Wand2 } from 'lucide-react';
+import { Mail, Phone, MapPin, Briefcase, GraduationCap, CheckCircle2, Wand2, FolderGit2, Link as LinkIcon } from 'lucide-react';
 import type { IProfile } from '../types';
 import { motion } from 'framer-motion';
 
@@ -10,7 +10,7 @@ interface ProfileViewerProps {
 export const ProfileViewer: React.FC<ProfileViewerProps> = ({ profile: initialProfile }) => {
   const [profile, setProfile] = useState<IProfile>(initialProfile);
 
-  const handleUpdate = (field: string, value: string, category?: 'personalInfo' | 'experiences' | 'education', index?: number, subfield?: string) => {
+  const handleUpdate = (field: string, value: string | string[], category?: 'personalInfo' | 'experiences' | 'projects' | 'education', index?: number, subfield?: string) => {
     setProfile(prev => {
       const updated = { ...prev };
       if (!category) {
@@ -165,6 +165,88 @@ export const ProfileViewer: React.FC<ProfileViewerProps> = ({ profile: initialPr
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Projects Section */}
+          <div className="glass-panel p-6">
+            <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2 border-b border-white/10 pb-3">
+              <FolderGit2 className="w-5 h-5 text-emerald-400" />
+              Projects
+            </h3>
+            <div className="space-y-6">
+              {profile.projects?.map((proj, index) => (
+                <div key={index} className="relative pl-6 border-l-2 border-white/10 last:pb-0 group">
+                  <div className="absolute w-3 h-3 bg-emerald-400 rounded-full -left-[7.5px] top-2 shadow-[0_0_10px_rgba(52,211,153,0.5)] group-hover:scale-125 transition-transform"></div>
+                  
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <input
+                      type="text"
+                      value={proj.title}
+                      onChange={(e) => handleUpdate('title', e.target.value, 'projects', index, 'title')}
+                      className="text-white font-medium bg-transparent border border-transparent hover:border-white/20 focus:border-emerald-400 focus:outline-none rounded px-2 -ml-2 transition-all w-full sm:flex-1"
+                    />
+                    <div className="flex items-center gap-1 group/link">
+                      <LinkIcon className="w-4 h-4 text-slate-500 group-hover/link:text-emerald-400 transition-colors" />
+                      <input
+                        type="text"
+                        value={proj.link || ''}
+                        onChange={(e) => handleUpdate('link', e.target.value, 'projects', index, 'link')}
+                        placeholder="Project URL"
+                        className="text-sm text-slate-400 bg-transparent border border-transparent hover:border-white/20 focus:border-emerald-400 focus:outline-none rounded px-1 transition-all w-32"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-1.5 mt-2 mb-3 pl-0.5">
+                    {proj.techStack.map((tech, techIndex) => (
+                      <input
+                        key={techIndex}
+                        type="text"
+                        value={tech}
+                        onChange={(e) => {
+                          const newStack = [...proj.techStack];
+                          newStack[techIndex] = e.target.value;
+                          handleUpdate('techStack', newStack, 'projects', index, 'techStack');
+                        }}
+                        className="text-xs bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 rounded px-2 py-0.5 w-auto max-w-[120px] focus:outline-none focus:border-emerald-500 focus:bg-emerald-500/20 hover:border-emerald-500/50 transition-colors"
+                      />
+                    ))}
+                    <button 
+                      onClick={() => {
+                        const newStack = [...proj.techStack, "New Tech"];
+                        handleUpdate('techStack', newStack, 'projects', index, 'techStack');
+                      }}
+                      className="text-xs bg-white/5 border border-white/10 text-slate-400 rounded px-2 py-0.5 hover:bg-white/10 hover:text-white transition-colors"
+                    >
+                      + Add Tech
+                    </button>
+                  </div>
+                  
+                  {proj.description !== undefined && (
+                    <textarea
+                      value={proj.description}
+                      onChange={(e) => handleUpdate('description', e.target.value, 'projects', index, 'description')}
+                      className="text-sm text-slate-300 leading-relaxed bg-transparent border border-transparent hover:border-white/20 focus:border-emerald-400 focus:outline-none rounded px-2 -ml-2 w-full transition-all min-h-[60px] resize-y"
+                    />
+                  )}
+                </div>
+              ))}
+              
+              {(!profile.projects || profile.projects.length === 0) && (
+                <p className="text-slate-500 text-sm italic">No projects found. You can add one below.</p>
+              )}
+              
+              <button 
+                onClick={() => {
+                  const newProject = { title: "New Project", description: "", techStack: ["Tech"] };
+                  const newProjects = [...(profile.projects || []), newProject];
+                  setProfile(prev => ({ ...prev, projects: newProjects }));
+                }}
+                className="text-sm font-medium text-emerald-400 hover:text-emerald-300 flex items-center gap-1 mt-4"
+              >
+                + Add Project
+              </button>
             </div>
           </div>
 

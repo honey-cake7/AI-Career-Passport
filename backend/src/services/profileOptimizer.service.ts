@@ -21,6 +21,11 @@ export async function optimizeProfileForJob(profile: IProfile, jobDescription: s
       company: exp.company,
       description: exp.description,
     })),
+    projects: profile.projects.map((proj) => ({
+      title: proj.title,
+      description: proj.description,
+      techStack: proj.techStack,
+    })),
     skills: profile.skills,
   };
 
@@ -33,7 +38,7 @@ Respond ONLY with a strictly formatted JSON object that matches this TypeScript 
   "missingHardSkills": string[],
   "missingSoftSkills": string[],
   "recommendations": string[], // General advice to improve the profile
-  "optimizedBullets": [ // Pick up to 4 key experience bullets and rewrite them to better align with the job description
+  "optimizedBullets": [ // Pick up to 4 key experience or project bullets and rewrite them to better align with the job description
     {
       "original": "original bullet",
       "optimized": "highly impactful, metric-driven rewrite",

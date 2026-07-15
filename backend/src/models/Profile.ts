@@ -30,6 +30,13 @@ export interface IEducation {
   gpa?: string;
 }
 
+export interface IProject {
+  title: string;
+  description?: string;
+  techStack: string[];
+  link?: string;
+}
+
 // ─── Profile Interface ──────────────────────────────────────
 
 export interface IProfile extends Document {
@@ -37,6 +44,7 @@ export interface IProfile extends Document {
   personalInfo: IPersonalInfo;
   experiences: IExperience[];
   education: IEducation[];
+  projects: IProject[];
   skills: string[]; // Strictly normalized canonical skill names
   slug: string; // Public sharing link
   rawResumeText?: string;
@@ -82,6 +90,16 @@ const EducationSchema = new Schema<IEducation>(
   { _id: false }
 );
 
+const ProjectSchema = new Schema<IProject>(
+  {
+    title: { type: String, required: true, trim: true },
+    description: { type: String, trim: true },
+    techStack: { type: [String], default: [] },
+    link: { type: String, trim: true },
+  },
+  { _id: false }
+);
+
 // ─── Profile Schema ─────────────────────────────────────────
 
 const ProfileSchema = new Schema<IProfile>(
@@ -103,6 +121,10 @@ const ProfileSchema = new Schema<IProfile>(
     },
     education: {
       type: [EducationSchema],
+      default: [],
+    },
+    projects: {
+      type: [ProjectSchema],
       default: [],
     },
     skills: {
