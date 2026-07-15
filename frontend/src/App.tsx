@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
 import { ResumeUpload } from './components/ResumeUpload';
 import { ProfileViewer } from './components/ProfileViewer';
@@ -8,7 +8,16 @@ import type { IProfile } from './types';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function App() {
-  const [profile, setProfile] = useState<IProfile | null>(null);
+  const [profile, setProfile] = useState<IProfile | null>(() => {
+    const cached = localStorage.getItem('passport_profile');
+    return cached ? JSON.parse(cached) : null;
+  });
+
+  useEffect(() => {
+    if (profile) {
+      localStorage.setItem('passport_profile', JSON.stringify(profile));
+    }
+  }, [profile]);
 
   return (
     <div className="min-h-screen pb-32">

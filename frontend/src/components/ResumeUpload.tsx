@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UploadCloud, FileText, Loader2, Sparkles } from 'lucide-react';
+import { UploadCloud, FileText, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import type { IProfile } from '../types';
@@ -84,10 +84,12 @@ export const ResumeUpload: React.FC<ResumeUploadProps> = ({ onUploadSuccess }) =
       </div>
 
       <motion.div
-        whileHover={{ scale: 1.01 }}
-        whileTap={{ scale: 0.99 }}
-        className={`glass-panel p-10 relative overflow-hidden transition-all duration-300 border-2 border-dashed ${
-          isDragging ? 'border-primary bg-primary/5' : 'border-white/10 hover:border-white/20'
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        className={`glass-panel p-10 relative overflow-hidden transition-all duration-500 border-2 border-dashed ${
+          isDragging 
+            ? 'border-primary bg-primary/10 shadow-[0_0_40px_rgba(59,130,246,0.3)] backdrop-blur-2xl' 
+            : 'border-white/10 hover:border-primary/50 hover:bg-surface/60 hover:shadow-2xl'
         }`}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
@@ -103,13 +105,18 @@ export const ResumeUpload: React.FC<ResumeUploadProps> = ({ onUploadSuccess }) =
               exit={{ opacity: 0, y: -10 }}
               className="flex flex-col items-center justify-center pointer-events-none"
             >
-              <div className="w-20 h-20 bg-surface/50 rounded-full flex items-center justify-center mb-6 shadow-xl border border-white/5">
-                <UploadCloud className="w-10 h-10 text-primary" />
-              </div>
+              <motion.div 
+                animate={{ y: [0, -10, 0] }} 
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                className="w-20 h-20 bg-surface/80 rounded-full flex items-center justify-center mb-6 shadow-[0_10px_30px_rgba(0,0,0,0.5)] border border-white/10 relative"
+              >
+                <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full"></div>
+                <UploadCloud className="w-10 h-10 text-primary relative z-10" />
+              </motion.div>
               <h3 className="text-xl font-semibold mb-2">Drag & drop your PDF</h3>
               <p className="text-slate-500 mb-6">or click to browse from your computer</p>
               
-              <label className="btn-secondary pointer-events-auto cursor-pointer">
+              <label className="btn-secondary pointer-events-auto cursor-pointer group hover:bg-white hover:text-black hover:border-white transition-all">
                 Browse Files
                 <input type="file" className="hidden" accept=".pdf" onChange={handleFileInput} />
               </label>
@@ -124,7 +131,7 @@ export const ResumeUpload: React.FC<ResumeUploadProps> = ({ onUploadSuccess }) =
               exit={{ opacity: 0, scale: 1.05 }}
               className="flex flex-col items-center justify-center"
             >
-              <div className="w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-primary/20">
+              <div className="w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center mb-4 shadow-[0_10px_30px_rgba(59,130,246,0.3)]">
                 <FileText className="w-8 h-8 text-white" />
               </div>
               <p className="text-lg font-medium text-white mb-1">{file.name}</p>
@@ -132,8 +139,8 @@ export const ResumeUpload: React.FC<ResumeUploadProps> = ({ onUploadSuccess }) =
               
               <div className="flex gap-4">
                 <button className="btn-secondary" onClick={() => setFile(null)}>Cancel</button>
-                <button className="btn-primary flex items-center gap-2" onClick={handleUpload}>
-                  <Sparkles className="w-4 h-4" />
+                <button className="btn-primary flex items-center gap-2 group" onClick={handleUpload}>
+                  <Sparkles className="w-4 h-4 group-hover:rotate-12 transition-transform" />
                   Extract & Normalize
                 </button>
               </div>
@@ -145,16 +152,39 @@ export const ResumeUpload: React.FC<ResumeUploadProps> = ({ onUploadSuccess }) =
               key="loading"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center py-8"
+              className="flex flex-col items-center justify-center py-4 w-full max-w-lg mx-auto"
             >
-              <div className="relative mb-8">
-                <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full"></div>
-                <Loader2 className="w-16 h-16 text-primary animate-spin relative z-10" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary animate-pulse">
+              <h3 className="text-xl font-semibold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary animate-pulse text-center">
                 Engaging AI Engine
               </h3>
-              <div className="flex flex-col gap-2 mt-4 text-sm text-slate-400">
+              
+              {/* Skeleton UI */}
+              <div className="w-full space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl bg-white/5 animate-pulse shrink-0"></div>
+                  <div className="space-y-3 flex-1">
+                    <div className="h-4 bg-white/5 rounded-full w-3/4 animate-pulse"></div>
+                    <div className="h-3 bg-white/5 rounded-full w-1/2 animate-pulse delay-75"></div>
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="h-8 bg-white/5 rounded-xl w-1/3 animate-pulse delay-100"></div>
+                  <div className="flex gap-2">
+                    <div className="h-6 bg-white/5 rounded-lg w-20 animate-pulse delay-150"></div>
+                    <div className="h-6 bg-white/5 rounded-lg w-24 animate-pulse delay-200"></div>
+                    <div className="h-6 bg-white/5 rounded-lg w-16 animate-pulse delay-300"></div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-4 border-t border-white/5">
+                  <div className="h-3 bg-white/5 rounded-full w-full animate-pulse delay-300"></div>
+                  <div className="h-3 bg-white/5 rounded-full w-5/6 animate-pulse delay-[400ms]"></div>
+                  <div className="h-3 bg-white/5 rounded-full w-4/6 animate-pulse delay-[500ms]"></div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2 mt-8 text-sm text-slate-400">
                 <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> Parsing PDF structure...</div>
                 <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" style={{ animationDelay: '0.5s' }}></div> Extracting experiences & education...</div>
                 <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" style={{ animationDelay: '1s' }}></div> Vectorizing skills against Qdrant taxonomy...</div>
