@@ -19,6 +19,11 @@
 
 <hr />
 
+## 🌐 Live Demo
+
+- **Frontend Application (Vercel):** [https://ai-career-passport.vercel.app](https://ai-career-passport.vercel.app)
+- **Backend API (Render):** [https://ai-career-passport.onrender.com/api/health](https://ai-career-passport.onrender.com/api/health)
+
 ## ✨ Key Features
 
 - **🧠 RAG Normalization Pipeline**: Uses a local Qdrant Vector Database and `fastembed` to map messy, raw user skills (e.g. "reactjs", "react.js") to an industry-standard canonical taxonomy.
@@ -56,7 +61,7 @@ flowchart TD
 | **Frontend** | React, Vite, TypeScript, Tailwind CSS, Framer Motion, Lucide React, Axios |
 | **Backend** | Node.js, Express, TypeScript, Mongoose, Multer, PDFKit, pdf-parse |
 | **AI / ML** | Groq API (LLaMA-3-70B), ONNX Runtime (`fastembed`), RAG Pipeline |
-| **Infrastructure** | Docker, Docker Compose, Qdrant (Vector DB), MongoDB |
+| **Infrastructure** | Vercel (Frontend), Render (Backend via Docker), Qdrant Cloud (Vector DB), MongoDB Atlas |
 
 ## 🚀 Getting Started (Local Development)
 
