@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+uploads
+local_cache
+qdrant-bin
+qdrant_storage
+storage
+snapshots
+*.zip
+*.log
+.git
