@@ -8,8 +8,8 @@ const messages: Record<SkillStage, string> = {
 };
 
 export class SkillPipelineError extends Error {
-  constructor(public readonly stage: SkillStage, public readonly code: 'timeout' | 'failed') {
-    super(messages[stage]);
+  constructor(public readonly stage: SkillStage, public readonly code: 'timeout' | 'failed' | 'busy') {
+    super(code === 'busy' ? 'Skill processing is busy. Please retry shortly.' : messages[stage]);
     this.name = 'SkillPipelineError';
   }
 }

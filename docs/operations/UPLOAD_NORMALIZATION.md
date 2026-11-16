@@ -73,3 +73,32 @@ Tests preload synthetic provider configuration instead of inheriting live creden
 Recorded local results: 21/21 tests passed, application and test TypeScript checks passed, the production TypeScript build passed, and `npm audit --audit-level=moderate` reported zero known backend dependency vulnerabilities. These results do not replace deployment verification.
 
 Local model checks exercised the actual FastEmbed/ONNX runtime: approximately 0.8 seconds using an existing cache, and 9.3 seconds including download into a new isolated cache on this Windows machine. These are single observations, not Render performance benchmarks or user latency promises. Docker Desktop's Linux engine was unavailable, so the Docker image itself could not be built locally. Production deployment and end-to-end normalization must be confirmed separately.
+
+## Follow-up: instance restarts after the model loads
+
+Subsequent Render logs showed model initialization completed and the instance restarted before the embedding stage finished. The owner confirmed a 512 MB instance, with no explicit OOM reason shown. This is consistent with memory exhaustion, but a host event or metrics are needed to confirm the actual restart cause. The Qdrant compatibility warning occurs separately; these logs stop before the Qdrant stage.
+
+The previous implementation padded each skill to the SDK's default 512-token length and processed eight together. The follow-up uses a 64-token maximum for short skill names, caps inference at one skill per batch, and admits only one inference operation per process. Overlapping inference returns a retryable 503 rather than allocating another native workload or queuing indefinitely. The admission slot is released after native inference settles, including failure/cancellation paths. Aggregate progress and RSS logs help distinguish a stall from continued processing without logging skill text.
+
+The same BGE Small EN v1.5 model and 384 dimensions are retained. This is a resource configuration change, not a switch to an incompatible embedding model. Long inputs may be truncated at the new token bound; this service is for short skill names, not resume passages.
+
+Manual local observations with 48 synthetic skill names, the app modules loaded, an existing model cache, and no live database or LLM calls:
+
+| Configuration | Observed elapsed time | Process peak RSS |
+| --- | ---: | ---: |
+| Prior 512-token padding, batch eight | 19.6 seconds | 543 MiB |
+| New 64-token padding, batch one | 3.2 seconds | 360 MiB |
+
+These are single Windows observations, not Render measurements or a guarantee that every 512 MB deployment will fit. Real PDF parsing, database connections, native runtime differences, and other requests add memory. A six-skill synthetic comparison yielded minimum cosine similarity 1.0 between the two configurations; it does not prove compatibility for every input or establish matching quality.
+
+To repeat the current real-model memory check after building:
+
+```sh
+node test/manual/embeddingMemory.mjs
+```
+
+The script installs synthetic test configuration before loading app modules, uses only known synthetic skill names, and reports baseline/final/peak process memory. It does not start the HTTP server or connect to MongoDB. The Qdrant client may emit a compatibility-probe warning against the test loopback address; it never uses the configured production cluster.
+
+An independent security issue was visible in the supplied startup logs: the legacy database success log printed the full connection URI. Success, retry, and disconnect logging now omit connection strings and raw driver errors. Regression tests verify this behavior. Previously exposed credentials must still be rotated: in [Atlas database user management](https://www.mongodb.com/docs/atlas/security-add-mongodb-users/), edit the database user's password, then update the corresponding Render `MONGODB_URI` and any local secret configuration. Removing a log statement does not invalidate old passwords or erase existing logs. Never paste the replacement password or connection string into an issue or chat.
+
+Follow-up local checks passed: 26/26 tests, application/test TypeScript checks, production build, and the real-model smoke/vector checks above. Tests additionally cover model settings, a hard batch cap, shared initialization with busy inference rejection, admission release after failure, a safe busy HTTP response with no write, and safe database success/retry/disconnect logs. Deployment and a real upload on the updated Render instance remain to be verified.

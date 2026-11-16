@@ -27,7 +27,7 @@ test('48 skills use a single embedding pass and a single Qdrant batch request', 
   const skills = Array.from({ length: 48 }, (_, i) => `skill-${i}`);
   const embed = t.mock.method(embeddingService, 'generateEmbeddings', async (texts: string[], batchSize?: number, signal?: AbortSignal) => {
     assert.deepEqual(texts, skills);
-    assert.equal(batchSize, 8);
+    assert.equal(batchSize, 1);
     assert.equal(signal?.aborted, false);
     return texts.map(() => Array(384).fill(0.1));
   });
@@ -52,14 +52,34 @@ test('an empty taxonomy fails explicitly instead of discarding every skill', asy
 test('failed initialization can retry and concurrent calls share initialization', async t => {
   const service = new EmbeddingService();
   let attempts = 0;
-  const mock = t.mock.method(FlagEmbedding, 'init', async () => {
+  const mock = t.mock.method(FlagEmbedding, 'init', async (options: { maxLength?: number }) => {
+    assert.equal(options.maxLength, 64);
     attempts++;
     if (attempts === 1) throw Error('synthetic download failure');
-    return { async *embed(texts: string[]) { yield texts.map(() => [1, 2, 3]); } } as any;
+    return { async *embed(texts: string[], batchSize: number) {
+      assert.equal(batchSize, 1);
+      yield texts.map(() => [1, 2, 3]);
+    } } as any;
   });
   await assert.rejects(service.generateEmbedding('synthetic'));
-  assert.deepEqual(await Promise.all([service.generateEmbedding('a'), service.generateEmbedding('b')]), [[1, 2, 3], [1, 2, 3]]);
+  const concurrent = await Promise.allSettled([service.generateEmbedding('a'), service.generateEmbedding('b')]);
+  assert.equal(concurrent.filter(result => result.status === 'fulfilled').length, 1);
+  const refused = concurrent.find(result => result.status === 'rejected');
+  assert.ok(refused && refused.status === 'rejected');
+  assert.equal(refused.reason.code, 'busy');
+  assert.deepEqual(await service.generateEmbeddings(['a', 'b'], 8), [[1, 2, 3], [1, 2, 3]]);
   assert.equal(mock.mock.callCount(), 2);
+});
+
+test('the inference slot is released after a native failure', async t => {
+  const service = new EmbeddingService();
+  let calls = 0;
+  t.mock.method(FlagEmbedding, 'init', async () => ({ async *embed() {
+    if (++calls === 1) throw new Error('synthetic native failure');
+    yield [[1, 2, 3]];
+  } } as any));
+  await assert.rejects(service.generateEmbedding('first'), /synthetic native failure/);
+  assert.deepEqual(await service.generateEmbedding('retry'), [1, 2, 3]);
 });
 
 test('an upload canceled while the shared model loads does not start late inference', async t => {

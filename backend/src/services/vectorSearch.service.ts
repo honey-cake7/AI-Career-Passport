@@ -22,7 +22,7 @@ export async function findSimilarSkills(rawSkill: string, topK = 3): Promise<Ski
 export async function findSimilarSkillsBatch(rawSkills: string[], topK = 3): Promise<SkillMatch[][]> {
   if (!rawSkills.length) return [];
   const vectors = await runSkillStage('embedding', 30_000, async signal => {
-    const result = await embeddingService.generateEmbeddings(rawSkills, 8, signal);
+    const result = await embeddingService.generateEmbeddings(rawSkills, 1, signal);
     if (result.length !== rawSkills.length || result.some(v => v.length !== VECTOR_DIMENSION || v.some(n => !Number.isFinite(n)))) {
       throw new Error('Invalid embedding batch');
     }

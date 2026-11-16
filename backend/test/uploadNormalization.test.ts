@@ -7,6 +7,7 @@ import { Profile } from '../src/models/Profile.js';
 import { groqClient } from '../src/config/groq.js';
 import { embeddingService } from '../src/services/embedding.service.js';
 import { qdrantClient } from '../src/config/qdrant.js';
+import { SkillPipelineError } from '../src/utils/skillPipeline.js';
 
 async function syntheticPdf(): Promise<Buffer> {
   const pdf = new PDFDocument();
@@ -19,16 +20,19 @@ async function syntheticPdf(): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-for (const unavailable of [true, false]) {
-test(unavailable ? 'real PDF upload returns safe 503 on taxonomy failure without saving' : 'real PDF upload saves canonical skills and preserves its response contract', async t => {
+for (const scenario of ['taxonomy_unavailable', 'success', 'embedding_busy'] as const) {
+test(`real PDF upload ${scenario}: bounded response and safe persistence`, async t => {
   const extractorResult = { personalInfo: { fullName: 'Synthetic Candidate' }, experiences: [], education: [], projects: [] };
   let calls = 0;
   t.mock.method(groqClient.chat.completions, 'create', async () => ({
     choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(++calls === 1 ? extractorResult : { skills: ['React.js'] }) } }],
   } as any));
-  t.mock.method(embeddingService, 'generateEmbeddings', async () => [Array(384).fill(0.1)]);
+  t.mock.method(embeddingService, 'generateEmbeddings', async () => {
+    if (scenario === 'embedding_busy') throw new SkillPipelineError('embedding', 'busy');
+    return [Array(384).fill(0.1)];
+  });
   t.mock.method(qdrantClient, 'queryBatch', async () => {
-    if (unavailable) throw Error('private dependency details');
+    if (scenario === 'taxonomy_unavailable') throw Error('private dependency details');
     return [{ points: [{ score: 0.8, payload: { skill_name: 'React.js' } }] }] as any;
   });
   const persistence = t.mock.method(Profile, 'findOneAndUpdate', async (_filter: unknown, update: any) => {
@@ -48,11 +52,11 @@ test(unavailable ? 'real PDF upload returns safe 503 on taxonomy failure without
       method: 'POST', body: form, signal: AbortSignal.timeout(10_000),
     });
     const body: any = await response.json();
-    if (unavailable) {
+    if (scenario !== 'success') {
       assert.equal(response.status, 503);
       assert.equal(response.headers.get('Retry-After'), '30');
       assert.equal(body.code, 'SKILL_PIPELINE_UNAVAILABLE');
-      assert.equal(body.stage, 'qdrant');
+      assert.equal(body.stage, scenario === 'embedding_busy' ? 'embedding' : 'qdrant');
       assert.equal(JSON.stringify(body).includes('private dependency details'), false);
       assert.equal(persistence.mock.callCount(), 0);
     } else {
