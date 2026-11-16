@@ -21,8 +21,8 @@ export async function findSimilarSkills(rawSkill: string, topK = 3): Promise<Ski
 /** One bounded embedding pass and one Qdrant request, rather than one request per skill. */
 export async function findSimilarSkillsBatch(rawSkills: string[], topK = 3): Promise<SkillMatch[][]> {
   if (!rawSkills.length) return [];
-  const vectors = await runSkillStage('embedding', 30_000, async signal => {
-    const result = await embeddingService.generateEmbeddings(rawSkills, 1, signal);
+  const vectors = await runSkillStage('embedding', 60_000, async signal => {
+    const result = await embeddingService.generateEmbeddings(rawSkills, 16, signal);
     if (result.length !== rawSkills.length || result.some(v => v.length !== VECTOR_DIMENSION || v.some(n => !Number.isFinite(n)))) {
       throw new Error('Invalid embedding batch');
     }
