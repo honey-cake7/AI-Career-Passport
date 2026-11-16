@@ -1,0 +1,151 @@
+import { useEffect, useId, useRef, useState, type FormEvent, type ChangeEvent } from 'react';
+import { isAxiosError } from 'axios';
+import { apiClient } from '../api/axios';
+import type { IProfile } from '../types';
+
+type Content = Omit<IProfile, 'profileId' | 'revision'>;
+function content(profile: IProfile): Content {
+  const { personalInfo, experiences, education, projects, skills } = profile;
+  return structuredClone({ personalInfo, experiences, education, projects, skills });
+}
+function message(error: unknown, fallback: string) {
+  return isAxiosError(error) && typeof error.response?.data?.error === 'string' ? error.response.data.error : fallback;
+}
+
+function Field({ title, value, onChange, multiline = false, required = false, maxLength = 300, type = 'text' }: {
+  title: string; value?: string; onChange: (value: string) => void;
+  multiline?: boolean; required?: boolean; maxLength?: number; type?: string;
+}) {
+  const id = useId();
+  const props = { id, value: value ?? '', onChange: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange(event.target.value), required, maxLength };
+  return <div className="resume-field"><label htmlFor={id}>{title}{required && ' *'}</label>{multiline ? <textarea {...props} rows={5} /> : <input {...props} type={type} />}</div>;
+}
+
+export function ResumeEditor({ profile, onSaved, onDeleted, onDirty }: {
+  profile: IProfile; onSaved: (profile: IProfile) => void; onDeleted: () => void; onDirty: (dirty: boolean) => void;
+}) {
+  const [draft, setDraft] = useState(() => content(profile));
+  // Keep separators while typing instead of reparsing the field on every keystroke.
+  const [skills, setSkills] = useState(profile.skills.join(', '));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [pdf, setPdf] = useState('');
+  const [conflict, setConflict] = useState(false);
+  const mounted = useRef(true);
+  const errorMessage = useRef<HTMLParagraphElement>(null);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(content(profile)) || skills !== profile.skills.join(', ');
+  useEffect(() => { onDirty(dirty); }, [dirty, onDirty]);
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => { if (dirty) { event.preventDefault(); event.returnValue = ''; } };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => () => { if (pdf) URL.revokeObjectURL(pdf); }, [pdf]);
+  useEffect(() => { if (error) errorMessage.current?.focus(); }, [error]);
+
+  function reset(next: IProfile) {
+    setDraft(content(next)); setSkills(next.skills.join(', ')); setConflict(false); setPdf('');
+  }
+  async function save(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError(''); setNotice('');
+    try {
+      const clean = { ...draft, skills: skills.split(',').map(x => x.trim()).filter(Boolean),
+        projects: draft.projects.map(p => ({ ...p, techStack: p.techStack.map(x => x.trim()).filter(Boolean) })) };
+      const response = await apiClient.put(`/api/profile/${profile.profileId}`, { revision: profile.revision, content: clean });
+      if (!mounted.current) return;
+      const next: IProfile = response.data.data;
+      reset(next); onSaved(next); setNotice('Saved. Your PDF will use these details.');
+    } catch (error) {
+      if (!mounted.current) return;
+      setError(message(error, 'Unable to save. Your edits are still here.'));
+      setConflict(isAxiosError(error) && error.response?.status === 409);
+    } finally { if (mounted.current) setBusy(false); }
+  }
+  async function preview() {
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const response = await apiClient.get(`/api/profile/${profile.profileId}/export`, { params: { revision: profile.revision }, responseType: 'blob' });
+      if (mounted.current) setPdf(URL.createObjectURL(response.data));
+    } catch (error) {
+      if (mounted.current) {
+        setError('Unable to generate this saved PDF. Reload if the resume changed in another session.');
+        setConflict(isAxiosError(error) && error.response?.status === 409);
+      }
+    } finally { if (mounted.current) setBusy(false); }
+  }
+  async function reload() {
+    if (dirty && !window.confirm('Discard your unsaved edits and load the latest saved resume?')) return;
+    setBusy(true); setError('');
+    try {
+      const response = await apiClient.get('/api/profile/me');
+      if (!mounted.current) return;
+      if (!response.data.data) { onDeleted(); return; }
+      reset(response.data.data); onSaved(response.data.data); setNotice('Loaded the latest saved resume.');
+    } catch (error) { if (mounted.current) setError(message(error, 'Unable to reload. Your edits are still here.')); }
+    finally { if (mounted.current) setBusy(false); }
+  }
+  async function remove() {
+    if (!window.confirm('Permanently delete this saved resume? Any unsaved edits will also be lost.')) return;
+    setBusy(true); setError('');
+    try { await apiClient.delete(`/api/profile/${profile.profileId}`); if (mounted.current) onDeleted(); }
+    catch (error) { if (mounted.current) setError(message(error, 'Unable to delete your resume.')); }
+    finally { if (mounted.current) setBusy(false); }
+  }
+  function personal(key: keyof Content['personalInfo'], value: string) {
+    setDraft(d => ({ ...d, personalInfo: { ...d.personalInfo, [key]: value } }));
+  }
+  function update<T extends 'experiences' | 'education' | 'projects'>(section: T, index: number, key: keyof Content[T][number], value: string | string[]) {
+    setDraft(d => ({ ...d, [section]: d[section].map((item, i) => i === index ? { ...item, [key]: value } : item) }));
+  }
+  function removeItem(section: 'experiences' | 'education' | 'projects', index: number) {
+    setDraft(d => ({ ...d, [section]: d[section].filter((_, i) => i !== index) }));
+  }
+
+  return <>
+    <div className="workspace-heading"><div><p className="eyebrow">YOUR WORKSPACE</p><h1>A resume that sounds like you.</h1><p>Edit the details. Keep the facts. Save a document you can stand behind.</p></div><span className="save-state" role="status">{dirty ? 'Unsaved changes' : 'All changes saved'}</span></div>
+    <div className="editor-layout">
+      <form onSubmit={save} className="editor-form">
+        <div className="document-toolbar"><strong>Base resume</strong><div className="actions"><button type="button" disabled={busy || !dirty} onClick={() => { if (window.confirm('Discard your unsaved changes?')) { reset(profile); setError(''); setNotice(''); } }}>Discard edits</button><button className="primary" disabled={busy || !dirty || conflict}>{busy ? 'Working…' : 'Save changes'}</button></div></div>
+        {error && <p className="error" role="alert" tabIndex={-1} ref={errorMessage}>{error}</p>}
+        {conflict && <button type="button" disabled={busy} onClick={() => void reload()}>Reload saved resume</button>}
+        {notice && <p className="notice" role="status">{notice}</p>}
+        <fieldset disabled={busy}>
+          <section className="editor-section"><p className="section-number">01 / INTRODUCTION</p><h2>The essentials</h2>
+            <div className="field-grid"><Field title="Full name" value={draft.personalInfo.fullName} onChange={v => personal('fullName', v)} required /><Field title="Location" value={draft.personalInfo.location} onChange={v => personal('location', v)} /><Field title="Email" type="email" value={draft.personalInfo.email} onChange={v => personal('email', v)} /><Field title="Phone" value={draft.personalInfo.phone} onChange={v => personal('phone', v)} /></div>
+            <Field title="LinkedIn URL" type="url" maxLength={1000} value={draft.personalInfo.linkedIn} onChange={v => personal('linkedIn', v)} />
+            <Field title="Summary" maxLength={5000} multiline value={draft.personalInfo.summary} onChange={v => personal('summary', v)} />
+          </section>
+          <section className="editor-section"><p className="section-number">02 / TOOLKIT</p><h2>Skills</h2><p className="hint">Separate skills with commas. Include skills you can discuss and demonstrate.</p><Field title="Your skills" maxLength={15000} multiline value={skills} onChange={setSkills} /></section>
+          <section className="editor-section"><p className="section-number">03 / EXPERIENCE</p><h2>Where you made a contribution</h2>
+            {draft.experiences.map((item, i) => <article className="entry" key={i}><div className="entry-heading"><h3>Experience {i + 1}</h3><button type="button" onClick={() => removeItem('experiences', i)}>Remove experience {i + 1}</button></div>
+              <div className="field-grid">{(['title', 'company', 'location', 'startDate', 'endDate'] as const).map(key => <Field key={key} title={{ title: 'Role', company: 'Company', location: 'Location', startDate: 'Start date', endDate: 'End date or Present' }[key]} required={key === 'title' || key === 'company'} value={item[key]} maxLength={key.includes('Date') ? 100 : 300} onChange={v => update('experiences', i, key, v)} />)}</div>
+              <Field title="Contribution and outcomes" maxLength={10000} multiline value={item.description} onChange={v => update('experiences', i, 'description', v)} /></article>)}
+            <button type="button" disabled={draft.experiences.length >= 30} onClick={() => setDraft(d => ({ ...d, experiences: [...d.experiences, { title: '', company: '' }] }))}>+ Add experience</button>
+          </section>
+          <section className="editor-section"><p className="section-number">04 / PROJECTS</p><h2>What you have built</h2>
+            {draft.projects.map((item, i) => <article className="entry" key={i}><div className="entry-heading"><h3>Project {i + 1}</h3><button type="button" onClick={() => removeItem('projects', i)}>Remove project {i + 1}</button></div>
+              <Field title="Project name" required value={item.title} onChange={v => update('projects', i, 'title', v)} /><Field title="Project URL" type="url" maxLength={1000} value={item.link} onChange={v => update('projects', i, 'link', v)} />
+              <Field title="Technologies · one per line" multiline maxLength={5000} value={item.techStack.join('\n')} onChange={v => update('projects', i, 'techStack', v.split('\n'))} />
+              <Field title="What you built and your contribution" maxLength={10000} multiline value={item.description} onChange={v => update('projects', i, 'description', v)} /></article>)}
+            <button type="button" disabled={draft.projects.length >= 30} onClick={() => setDraft(d => ({ ...d, projects: [...d.projects, { title: '', techStack: [] }] }))}>+ Add project</button>
+          </section>
+          <section className="editor-section"><p className="section-number">05 / EDUCATION</p><h2>Your education</h2>
+            {draft.education.map((item, i) => <article className="entry" key={i}><div className="entry-heading"><h3>Education {i + 1}</h3><button type="button" onClick={() => removeItem('education', i)}>Remove education {i + 1}</button></div><div className="field-grid">
+              {(['institution', 'degree', 'field', 'startDate', 'endDate', 'gpa'] as const).map(key => <Field key={key} title={{ institution: 'Institution', degree: 'Degree', field: 'Field of study', startDate: 'Start date', endDate: 'End date', gpa: 'Grade or GPA' }[key]} required={key === 'institution' || key === 'degree'} maxLength={['startDate', 'endDate', 'gpa'].includes(key) ? 100 : 300} value={item[key]} onChange={v => update('education', i, key, v)} />)}</div></article>)}
+            <button type="button" disabled={draft.education.length >= 20} onClick={() => setDraft(d => ({ ...d, education: [...d.education, { institution: '', degree: '' }] }))}>+ Add education</button>
+          </section>
+        </fieldset>
+        <div className="document-toolbar"><p className="hint">* Required fields. Save before previewing or downloading.</p><button className="primary" disabled={busy || !dirty || conflict}>Save changes</button></div>
+      </form>
+      <aside className="document-aside"><div className="preview-card"><p className="eyebrow">THE DOCUMENT</p><h2>Ready when you are.</h2><p>Your PDF is generated from the saved resume, using a clean A4 layout.</p><button className="primary" disabled={busy || dirty} onClick={() => void preview()}>{pdf && !dirty ? 'Refresh PDF preview' : 'Preview saved PDF'}</button>
+        {dirty && <p className="hint">Save your changes to update the PDF.</p>}
+        {pdf && !dirty && <><a className="download-link" href={pdf} download="resume.pdf">Download this PDF ↓</a><iframe title="Saved resume PDF" src={pdf} /></>}
+        <p className="hint">The preview and download use the same PDF. Importing a PDF does not preserve its original design.</p></div>
+        <div className="editor-note"><h3>Make every line useful.</h3><p>Describe what you did, how you did it, and the result. Add numbers only when you know they are accurate.</p></div>
+        <button className="danger-link" disabled={busy} onClick={() => void remove()}>Delete saved resume</button>
+      </aside>
+    </div>
+  </>;
+}

@@ -1,10 +1,16 @@
 # AI Career Passport: product strategy challenge
 
-Research date: 2026-11-17. Status: **proposal awaiting owner approval**.
+Research date: 2026-11-17. Status: **editor-first direction approved by the owner on 2026-11-17**.
+
+## Approved refinement: a job-focused resume editor
+
+Following discussion, the owner prioritized editing a resume in the application, downloading the corrected PDF, tailoring to a real job description, and getting practical gap suggestions. Build an editable base resume first, then separate job-specific versions with reviewable suggestions. Preserve the evidence workbench's distinction between supported, claimed, absent and unassessable requirements. No objective readiness score, invented achievements or automatic approval of model rewrites.
+
+The core workflow is import or write → correct and save → supply one job description → inspect requirements and evidence → accept/edit/reject factual suggestions → save a job version → export → choose a practical improvement action. GitHub remains optional and deferred. The original research below is retained as historical analysis; its earlier project-improvement-first sequence is superseded by the [approved engineering roadmap](architecture/ROADMAP.md). Approval does not establish user demand, validate AI accuracy or authorize a production deployment.
 
 Recommendation: evolve toward a **Job Evidence Workbench for early-career developers**. Help someone choose what to improve in an existing project for one real job, using a reviewable connection between requirements, claims, and work artifacts. Resume analysis becomes an input to that decision. A general career platform and a supposedly verified skills passport are poor starting positions.
 
-This document changes no application behavior, architecture decision, or approved engineering roadmap. The proposed sequence in section 13 is conditional. After owner approval, update [ROADMAP.md](architecture/ROADMAP.md) and record the relevant architectural decisions. This research and document were produced with AI assistance; they do not represent interviews or product experiments conducted by the owner.
+This research and document were produced with AI assistance; they do not represent interviews or product experiments conducted by the owner. Implementation status is recorded in milestone reports.
 
 ## 1. Existing product critique
 
@@ -281,4 +287,4 @@ This is a strategy sequence, not a replacement for the existing engineering road
 
 For an independent developer, complete one milestone at a time and report what was measured. Do not bind this plan to a delivery date before observing correction and evaluation effort. The interview story should explain the problem selection, rejected alternatives, provenance limitations, measured model errors, privacy boundaries, and the tradeoff between deterministic rules and model proposals. Technical sophistication comes from making a small decision trustworthy and useful, not from maximizing services or generated features.
 
-**Owner decision requested:** approve a validation-first Job Evidence Workbench focused on one job and one project improvement, revise the segment/workflow, or choose a different direction. Approval authorizes roadmap alignment; it does not by itself validate demand or authorize an architectural rewrite or production deployment.
+**Decision recorded:** proceed with the editor-first refinement above, preserving evidence and trust principles. Complete and verify one milestone before expanding scope. Production release still requires separate owner authorization.

@@ -1,6 +1,20 @@
 # Architecture decisions
 
-Date: 2026-11-16. Baseline context and evidence: [AUDIT.md](AUDIT.md).
+Updated: 2026-11-17. Baseline context and evidence: [AUDIT.md](AUDIT.md). ADR-008 supersedes the preview-only behavior and upload replacement described in earlier M1 decisions; JSON body size is now 256 KiB for bounded full-document saves.
+
+## ADR-008 — A saved base resume before job-specific intelligence
+
+**Status:** accepted, owner approved editor-first direction on 2026-11-17.
+
+Keep the current stack and hosting topology. One owner has one base profile. Add manual creation and a complete, runtime-validated content update. Allow only declared fields, bounded strings/arrays and credential-free HTTP(S) links. Unknown fields and supplied ownership fail validation. Extraction maps absent optional null strings to empty strings, then uses the same content contract; unknown keys, missing arrays and invalid types fail. This validates shape, not factual accuracy.
+
+Use an explicit integer revision and an atomic `{_id, userId, revision}` update with `$inc`. Legacy documents without revision start at zero. Stale edits return 409 and remain in browser memory until explicit discard/reload. PDF imports create a profile only; the unique owner index prevents concurrent import/manual creation from overwriting existing edits. Replacing an existing resume by upload is deliberately unavailable. Successful correction removes legacy raw resume text.
+
+The editor has one draft and a saved snapshot. Save is explicit, inputs are disabled during a save, and export is disabled while dirty. Fetch a PDF for the known saved revision, then use one private blob URL for both preview and download. Revoke URLs on replacement/unmount. A server-side revision check rejects stale export requests. Downloading an already generated PDF is downloading that snapshot. Preserve user-entered skills instead of requiring normalization on every save; manual editing/export performs no model work.
+
+Regenerate a single PDFKit layout rather than promising exact-source PDF layout editing. Bundle OFL Noto Sans fonts for reproducible common Unicode output. Full writing-system coverage and complex pagination remain release checks. Remove unused preview-only/fake-verification and score-dashboard components. The legacy optimizer API remains for compatibility but is not exposed in the editor; replace its unchecked score/rewrite contract before job review is reintroduced.
+
+**Consequences:** the existing Vercel/Render/Mongo/Qdrant setup is sufficient for this milestone; no new paid service is added. Playwright is a development test dependency. Sessions and unsaved drafts still live only in memory; refresh/login expiry can lose unsaved edits. This is a working editor milestone, not completion of SaaS release gates. M3 must preserve the base resume and explicitly approve changes in separate owner-scoped job versions.
 
 ## ADR-001 — Preserve the modular monolith
 

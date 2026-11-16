@@ -4,6 +4,7 @@ import multer from 'multer';
 import profileRoutes from './routes/profile.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import { rateLimit } from './security/rateLimit.js';
+import { SkillPipelineError } from './utils/skillPipeline.js';
 
 export function createApp(profileRouter = profileRoutes) {
   const app = express();
@@ -19,12 +20,15 @@ export function createApp(profileRouter = profileRoutes) {
     next();
   });
   app.use('/api', rateLimit(200, 60 * 1000));
-  app.use(express.json({ limit: '32kb' }));
+  app.use(express.json({ limit: '256kb' }));
   app.use('/api/auth', authRoutes);
   app.use('/api/profile', profileRouter);
   app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
   app.use((_req, res) => { res.status(404).json({ success: false, error: 'Route not found' }); });
   app.use((err: Error & { status?: number }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (err instanceof SkillPipelineError) {
+      res.status(503).json({ success: false, error: err.message }); return;
+    }
     if (err instanceof multer.MulterError) {
       res.status(err.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({
         success: false, error: 'Upload one PDF up to 10 MB; additional fields are not accepted',

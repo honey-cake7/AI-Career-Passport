@@ -4,6 +4,7 @@ import type { IProject } from '../src/models/Profile.js';
 export interface AuthData { token: string; passwordHash?: unknown }
 export interface SavedProfile {
   profileId: string;
+  revision: number;
   projects: IProject[];
   rawResumeText?: unknown;
   userId?: unknown;

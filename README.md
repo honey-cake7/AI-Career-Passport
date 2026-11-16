@@ -10,19 +10,19 @@ An existing React/TypeScript, Express, MongoDB and Qdrant prototype being improv
 | --- | --- |
 | Account registration/login/logout | Implemented: salted scrypt passwords and one-hour revocable Mongo sessions. Browser token is memory-only; refresh requires login. |
 | Private profile ownership | Session-derived owner; owner-scoped upload, retrieval, AI analysis, PDF export and profile deletion. |
-| Resume PDF upload | One PDF up to 10 MB, MIME/signature/text bounds. Groq extracts structured fields; FastEmbed/Qdrant help normalize skills. Full model-output validation and parsing resource isolation remain incomplete. |
+| Resume PDF upload | One PDF up to 10 MB, MIME/signature/text bounds. Groq extracts structured fields; FastEmbed/Qdrant normalize skills. Extracted content is runtime-validated before persistence. Import creates a resume; it cannot replace existing edits. Parsing resource isolation and AI factuality evaluation remain incomplete. |
 | Profile persistence | Personal info, experience, education, projects and skills persist. New uploads do not retain raw resume text. |
-| Review/edit | Preview edits only. They are **not saved**; analysis/export use the saved uploaded profile. Persistent correction is a priority follow-up. |
-| Job analysis | Existing Groq-generated suggestions and an unvalidated model score. It is **not a hiring probability** or a validated scoring system. Review suggestions for mistakes and invented claims. |
-| PDF export | One PDFKit layout from the saved profile; projects included. No selectable themes or approved rewrite/version export yet. |
+| Review/edit | Manual creation, editable contact/summary/skills/experience/projects/education, explicit validated save and reload. Atomic revisions prevent lost updates; errors retain the current draft. Editing/save/export need no AI services. |
+| Job analysis | Legacy optimizer API remains, with an unchecked model score/rewrite contract. Removed from the editor UI pending validated evidence-based job review and approval. Never treat its score as hiring probability. |
+| PDF export | Saved-revision PDF preview and download use the same file. One PDFKit A4 layout with bundled Noto Sans fonts; original import layout is not preserved. Full multilingual coverage and advanced pagination remain open. |
 | Public sharing | Disabled: legacy links exposed contact data without explicit consent. |
 | Resume versions/application tracking | Planned; not implemented. |
 
-See the [technical audit](docs/architecture/AUDIT.md), [phased roadmap](docs/architecture/ROADMAP.md), [architecture decisions](docs/architecture/DECISIONS.md) and [first milestone report](docs/architecture/MILESTONE-1.md). Roadmap items are not claims of implemented features.
+See the [technical audit](docs/architecture/AUDIT.md), [phased roadmap](docs/architecture/ROADMAP.md), [architecture decisions](docs/architecture/DECISIONS.md), [first milestone](docs/architecture/MILESTONE-1.md) and [editor milestone](docs/architecture/MILESTONE-2.md). Roadmap items are not claims of implemented features.
 
 ## Run locally
 
-Use Node.js 24 and npm with MongoDB and Qdrant available locally. The repository includes separate backend/frontend lockfiles.
+Use Node.js 24 and npm with MongoDB available locally. Qdrant and Groq are needed for PDF import/normalization; manual creation, editing and export do not use them. The repository includes separate backend/frontend lockfiles. In PowerShell environments that block `npm.ps1`, use `npm.cmd` for the commands below.
 
 ```bash
 git clone https://github.com/honey-cake7/AI-Career-Passport.git
@@ -73,9 +73,11 @@ Frontend:
 cd frontend
 npm run lint
 npm run build
+npx playwright install chromium
+npm run test:e2e
 ```
 
-Recorded results and limitations are in the milestone report. There is not yet a complete browser/accessibility/AI evaluation CI pipeline.
+Playwright exercises the real editor in desktop/mobile Chromium using synthetic API responses. Mongo integration tests independently verify the real HTTP/database/PDF path. These are complementary checks, not a live-provider end-to-end evaluation. Recorded results and limitations are in the milestone report; complete accessibility/AI evaluation CI remains open.
 
 ## API boundary
 
@@ -87,9 +89,11 @@ Authenticate using `Authorization: Bearer <token>` returned by registration/logi
 | POST | `/api/auth/login` | Verify credentials and issue a new session. |
 | POST | `/api/auth/logout` | Revoke current session. |
 | GET | `/api/profile/me` | Current owner's saved profile or `null`. |
-| POST | `/api/profile/upload` | One multipart `resume` PDF; extra text/ownership fields rejected. |
+| POST | `/api/profile` | Create one private base resume with `{personalInfo, experiences, education, projects, skills}`. Duplicate owner returns 409. |
+| PUT | `/api/profile/:profileId` | Save `{revision, content}` using the complete resume content above. Returns updated profile/revision. Invalid fields return 400; stale revision returns 409 without modifying the saved document. |
+| POST | `/api/profile/upload` | One multipart `resume` PDF; extra text/ownership fields rejected. Existing profile returns 409 without replacement. |
 | POST | `/api/profile/:profileId/optimize` | Owner-only; `{ jobDescription }` with 1–20,000 characters. |
-| GET | `/api/profile/:profileId/export` | Owner-only saved-profile PDF. |
+| GET | `/api/profile/:profileId/export?revision=0` | Owner-only saved-profile PDF; supplied stale revision returns 409. |
 | DELETE | `/api/profile/:profileId` | Delete owner's saved profile, including private fields. |
 | GET | `/api/profile/public/:slug` | Always 404; legacy public disclosure disabled. |
 | GET | `/api/health` | Process liveness only; does not prove dependency readiness. |
@@ -98,6 +102,6 @@ Unauthorized private requests return 401; missing/foreign profiles return the sa
 
 ## Privacy and release boundaries
 
-New uploads stop retaining raw text and logs omit resume/model content and connection strings. Existing raw-text records, provider retention, backups and browser caches on devices that never open the updated app are not purged by a code change. Legacy shared-ID profiles cannot safely be claimed from resume email; no automatic migration is attempted. Profile deletion is implemented; account deletion, password recovery, email verification and consent-based public sharing remain open.
+New uploads do not retain raw text; saving corrections also removes legacy raw text for that profile. Logs omit resume/model content and connection strings. Other existing raw-text records, provider retention, backups and browser caches on devices that never open the updated app are not purged by a code change. Legacy shared-ID profiles cannot safely be claimed from resume email; no automatic migration is attempted. Profile deletion is implemented; account deletion, password recovery, email verification and consent-based public sharing remain open. Unsaved drafts remain in memory only and are lost on refresh/session expiry; save before leaving.
 
 Development-branch pushes are authorized. Merging to main and production deployment require separate owner approval. No claim of near-perfect extraction, ATS certification, guaranteed hiring outcomes or production security is made.

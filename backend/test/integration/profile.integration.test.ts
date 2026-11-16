@@ -103,21 +103,58 @@ test('owner export produces a parseable PDF including persisted projects', async
   assert.match(text, /Synthetic Candidate/); assert.match(text, /Evidence Portfolio/); assert.match(text, /TypeScript/);
 });
 
-test('re-upload unsets legacy raw text and updates the same owner document', async () => {
-  await Profile.updateOne({ _id: profileId }, { $set: { rawResumeText: 'synthetic legacy retained text' } });
+test('re-upload cannot overwrite an existing edited resume', async () => {
   const form = new FormData(); form.append('resume', new Blob([new Uint8Array(resume)], { type: 'application/pdf' }), 'synthetic.pdf');
   const response = await fetch(base + '/api/profile/upload', { method: 'POST', headers: { Authorization: `Bearer ${tokenA}` }, body: form });
-  assert.equal(response.status, 200); assert.equal((await readData<SavedProfile>(response)).profileId, profileId);
+  assert.equal(response.status, 409);
   assert.equal(await Profile.countDocuments(), 1);
   assert.equal((await Profile.findById(profileId).select('+rawResumeText'))?.rawResumeText, undefined);
 });
 
 test('corrupt PDF with a valid signature fails safely without overwriting the saved profile', async () => {
   const form = new FormData(); form.append('resume', new Blob(['%PDF-invalid'], { type: 'application/pdf' }), 'broken.pdf');
-  const response = await fetch(base + '/api/profile/upload', { method: 'POST', headers: { Authorization: `Bearer ${tokenA}` }, body: form });
+  const response = await fetch(base + '/api/profile/upload', { method: 'POST', headers: { Authorization: `Bearer ${tokenB}` }, body: form });
   assert.equal(response.status, 422);
   assert.equal(await readError(response), 'Unable to read PDF text. Upload a readable text-based PDF.');
   assert.equal((await Profile.findById(profileId))?.projects[0].title, 'Evidence Portfolio');
+});
+
+test('manual creation validates content, binds the session owner and prevents duplicate resumes', async () => {
+  const content = { ...extracted, skills: [] };
+  assert.equal((await request('/api/profile', 'POST')).status, 401);
+  assert.equal((await request('/api/profile', 'POST', tokenB, { ...content, userId: new mongoose.Types.ObjectId() })).status, 400);
+  assert.equal((await request('/api/profile', 'POST', tokenB, { ...content, projects: [{ title: 'Unsafe', techStack: [], link: 'javascript:alert(1)' }] })).status, 400);
+  const response = await request('/api/profile', 'POST', tokenB, content);
+  assert.equal(response.status, 201);
+  const created = await readData<SavedProfile>(response);
+  assert.equal(created.revision, 0);
+  assert.equal((await request('/api/profile', 'POST', tokenB, content)).status, 409);
+  assert.equal((await request(`/api/profile/${created.profileId}`, 'DELETE', tokenB)).status, 204);
+});
+
+test('owner corrections survive reload and PDF export; cross-user and stale saves cannot overwrite them', async () => {
+  await Profile.updateOne({ _id: profileId }, { $set: { rawResumeText: 'synthetic legacy retained text' }, $unset: { revision: 1 } });
+  const updated = { ...extracted, personalInfo: { fullName: 'Corrected Candidate', summary: 'Built a reliable parser.' },
+    projects: [{ title: 'Corrected Portfolio', description: 'Added regression tests.', techStack: ['TypeScript'], link: 'https://example.invalid/project' }], skills: ['TypeScript', 'Testing'] };
+  const envelope = { revision: 0, content: updated };
+  assert.equal((await request(`/api/profile/${profileId}`, 'PUT', tokenB, envelope)).status, 404);
+  assert.equal((await request(`/api/profile/${profileId}`, 'PUT', undefined, envelope)).status, 401);
+  assert.equal((await request(`/api/profile/${profileId}`, 'PUT', tokenA, { ...envelope, content: { ...updated, userId: 'other' } })).status, 400);
+  const results = await Promise.all([request(`/api/profile/${profileId}`, 'PUT', tokenA, envelope), request(`/api/profile/${profileId}`, 'PUT', tokenA, envelope)]);
+  assert.deepEqual(results.map(r => r.status).sort(), [200, 409]);
+  const saved = await readData<SavedProfile>(results.find(r => r.status === 200)!);
+  assert.equal(saved.revision, 1);
+  assert.equal((await Profile.findById(profileId).select('+rawResumeText'))?.rawResumeText, undefined);
+  const reload = await readData<SavedProfile>(await request('/api/profile/me', 'GET', tokenA));
+  assert.equal(reload.projects[0].title, 'Corrected Portfolio'); assert.equal(reload.revision, 1);
+  assert.equal((await request(`/api/profile/${profileId}/export?revision=0`, 'GET', tokenA)).status, 409);
+  const exported = await request(`/api/profile/${profileId}/export?revision=1`, 'GET', tokenA);
+  assert.equal(exported.status, 200);
+  const text = await extractTextFromPdf(Buffer.from(await exported.arrayBuffer()));
+  for (const expected of ['Corrected Candidate', 'Corrected Portfolio', 'Added regression tests.', 'Testing']) assert.ok(text.includes(expected));
+  assert.ok(!text.includes('Evidence Portfolio'));
+  assert.equal((await request(`/api/profile/${profileId}`, 'PUT', tokenA, { revision: 1, content: { ...updated, skills: Array(151).fill('Spam') } })).status, 400);
+  assert.equal((await Profile.findById(profileId))?.revision, 1);
 });
 
 test('explicit expiry denies access before TTL cleanup; logout revokes the token', async () => {

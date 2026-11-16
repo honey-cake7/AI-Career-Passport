@@ -41,11 +41,12 @@ export interface IProject {
 
 export interface IProfile extends Document {
   userId: Types.ObjectId;
+  revision: number;
   personalInfo: IPersonalInfo;
   experiences: IExperience[];
   education: IEducation[];
   projects: IProject[];
-  skills: string[]; // Strictly normalized canonical skill names
+  skills: string[]; // User-reviewed wording; canonical matching is a separate concern.
   slug: string; // Public sharing link
   rawResumeText?: string;
   createdAt: Date;
@@ -104,6 +105,7 @@ const ProjectSchema = new Schema<IProject>(
 
 const ProfileSchema = new Schema<IProfile>(
   {
+    revision: { type: Number, default: 0, min: 0 },
     userId: {
       type: Schema.Types.ObjectId,
       ref: 'User',

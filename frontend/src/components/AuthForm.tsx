@@ -20,15 +20,16 @@ export function AuthForm({ onSignIn }: { onSignIn: () => void }) {
       setError(isAxiosError(error) ? error.response?.data?.error ?? 'Unable to connect. Please try again.' : 'Sign-in failed');
     } finally { setBusy(false); }
   }
-  return <main className="max-w-md mx-auto px-6 py-20">
-    <h1 className="text-3xl font-semibold mb-4">AI Career Passport</h1>
-    <p className="text-slate-300 mb-8">Understand what your resume shows—and what the job requires.</p>
-    <form onSubmit={submit} className="space-y-5">
-      <h2 className="text-xl">{register ? 'Create your account' : 'Sign in'}</h2>
+  return <main className="auth-shell">
+    <div className="auth-intro"><div className="brand"><span className="brand-mark" aria-hidden="true">CP</span> Career Passport</div>
+    <h1>Your work deserves<br />a clear story.</h1>
+    <p>Review your experience, edit your resume, and prepare a document that feels like you.</p></div>
+    <form onSubmit={submit} className="auth-card">
+      <h2>{register ? 'Create your account' : 'Welcome back'}</h2>
       <label className="block">Email<input name="email" type="email" autoComplete="email" required disabled={busy} maxLength={254} className="input-field mt-2" /></label>
       <label className="block">Password<input name="password" type="password" autoComplete={register ? 'new-password' : 'current-password'} required disabled={busy} minLength={12} maxLength={128} className="input-field mt-2" /></label>
-      <p className="text-sm text-slate-400">Use 12–128 characters. Sessions last one hour; refreshing requires signing in again.</p>
-      {error && <p role="alert" className="text-red-300">{error}</p>}
+      <p className="hint">Use 12–128 characters. Sessions last one hour; refreshing requires signing in again.</p>
+      {error && <p role="alert" className="error">{error}</p>}
       <button disabled={busy} className="btn-primary w-full">{busy ? 'Please wait…' : register ? 'Create account' : 'Sign in'}</button>
       <button type="button" disabled={busy} className="underline" onClick={() => { setRegister(!register); setError(''); }}>{register ? 'Already have an account? Sign in' : 'Create an account'}</button>
     </form>

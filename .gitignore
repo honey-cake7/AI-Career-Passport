@@ -21,3 +21,5 @@ uploads/
 # fastembed model cache
 local_cache/
 .tmp/
+test-results/
+playwright-report/

@@ -34,21 +34,10 @@ export interface IProject {
 
 export interface IProfile {
   profileId: string;
+  revision: number;
   personalInfo: IPersonalInfo;
   experiences: IExperience[];
   education: IEducation[];
   projects: IProject[];
   skills: string[];
-}
-
-export interface IOptimizationResult {
-  matchScore: number;
-  missingHardSkills: string[];
-  missingSoftSkills: string[];
-  recommendations: string[];
-  optimizedBullets: {
-    original: string;
-    optimized: string;
-    explanation: string;
-  }[];
 }

@@ -4,6 +4,7 @@ import { Profile, type IProfile } from '../models/Profile.js';
 import { requireAuth } from '../security/auth.js';
 import { rateLimit } from '../security/rateLimit.js';
 import type { ExtractedProfile } from '../services/profileExtractor.service.js';
+import { parseResumeContent, parseResumeSave, ResumeInputError } from '../validation/resume.js';
 
 // Lazy loading keeps authentication independent of AI keys and native models.
 const services = {
@@ -16,7 +17,7 @@ const services = {
 
 export function profileData(profile: IProfile) {
   return {
-    profileId: profile._id, personalInfo: profile.personalInfo,
+    profileId: profile._id, revision: profile.revision ?? 0, personalInfo: profile.personalInfo,
     experiences: profile.experiences, education: profile.education,
     projects: profile.projects, skills: profile.skills,
   };
@@ -49,10 +50,29 @@ export function createProfileRouter(deps = services) {
     res.json({ success: true, data: profile ? profileData(profile) : null });
   });
 
+  router.post('/', async (req, res) => {
+    let content;
+    try { content = parseResumeContent(req.body); }
+    catch (error) {
+      if (!(error instanceof ResumeInputError)) throw error;
+      res.status(400).json({ success: false, error: error.message }); return;
+    }
+    try {
+      const profile = await Profile.create({ ...content, userId: res.locals.userId });
+      res.status(201).json({ success: true, data: profileData(profile) });
+    } catch (error) {
+      if ((error as { code?: number }).code !== 11000) throw error;
+      res.status(409).json({ success: false, error: 'A resume already exists. Reload your saved resume before editing.' });
+    }
+  });
+
   router.post('/upload', aiLimit, upload.single('resume'), async (req, res) => {
     if (!req.file || req.file.mimetype !== 'application/pdf' || req.file.buffer.subarray(0, 5).toString() !== '%PDF-') {
       res.status(400).json({ success: false, error: 'Upload a PDF file in the resume field' });
       return;
+    }
+    if (await Profile.findOne({ userId: res.locals.userId })) {
+      res.status(409).json({ success: false, error: 'A resume already exists. Edit your saved resume instead of replacing it.' }); return;
     }
     let text: string;
     try {
@@ -67,12 +87,20 @@ export function createProfileRouter(deps = services) {
     }
     const extracted = await deps.extract(text);
     const skills = await deps.normalize(text);
-    const profile = await Profile.findOneAndUpdate(
-      { userId: res.locals.userId },
-      { $set: profileUpdate(extracted, skills), $unset: { rawResumeText: 1 } },
-      { returnDocument: 'after', upsert: true, runValidators: true },
-    );
-    res.json({ success: true, data: profileData(profile) });
+    let content;
+    try { content = parseResumeContent(profileUpdate(extracted, skills)); }
+    catch (error) {
+      if (!(error instanceof ResumeInputError)) throw error;
+      res.status(422).json({ success: false, error: 'The extracted resume contains invalid details. Try another PDF or start a blank resume.' }); return;
+    }
+    try {
+      // A unique owner index also protects concurrent imports/manual creation.
+      const profile = await Profile.create({ ...content, userId: res.locals.userId });
+      res.json({ success: true, data: profileData(profile) });
+    } catch (error) {
+      if ((error as { code?: number }).code !== 11000) throw error;
+      res.status(409).json({ success: false, error: 'A resume was created in another session. Reload your saved resume.' });
+    }
   });
 
   // Ownership belongs in the database predicate, not in a client assertion.
@@ -98,7 +126,32 @@ export function createProfileRouter(deps = services) {
     }
     res.json({ success: true, data: await deps.optimize(res.locals.profile, jobDescription) });
   });
-  router.get('/:profileId/export', async (_req, res) => {
+  router.put('/:profileId', async (req, res) => {
+    let input;
+    try { input = parseResumeSave(req.body); }
+    catch (error) {
+      if (!(error instanceof ResumeInputError)) throw error;
+      res.status(400).json({ success: false, error: error.message }); return;
+    }
+    // Atomic comparison prevents a second tab from silently erasing a newer save.
+    // Older documents have no revision field and are treated as revision zero.
+    const revisionFilter = input.revision === 0
+      ? { $or: [{ revision: 0 }, { revision: { $exists: false } }] }
+      : { revision: input.revision };
+    const profile = await Profile.findOneAndUpdate(
+      { _id: req.params.profileId, userId: res.locals.userId, ...revisionFilter },
+      { $set: input.content, $inc: { revision: 1 }, $unset: { rawResumeText: 1 } },
+      { returnDocument: 'after', runValidators: true },
+    );
+    if (!profile) {
+      res.status(409).json({ success: false, error: 'Your resume changed in another session. Your edits are still here. Reload the saved resume before trying again.' }); return;
+    }
+    res.json({ success: true, data: profileData(profile) });
+  });
+  router.get('/:profileId/export', async (req, res) => {
+    if (req.query.revision !== undefined && req.query.revision !== String(res.locals.profile.revision ?? 0)) {
+      res.status(409).json({ success: false, error: 'The saved resume changed. Reload it before exporting.' }); return;
+    }
     const buffer = await deps.pdf(res.locals.profile);
     res.setHeader('Content-Disposition', 'attachment; filename="resume.pdf"');
     res.type('pdf').send(buffer);

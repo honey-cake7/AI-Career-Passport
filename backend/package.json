@@ -5,8 +5,8 @@
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
-    "test": "node --import tsx --test test/*.test.ts",
-    "test:integration": "node --import tsx --test test/integration/*.test.ts",
+    "test": "node --import tsx --import ./test/setup.mjs --test test/*.test.ts",
+    "test:integration": "node --import tsx --import ./test/setup.mjs --test test/integration/*.test.ts",
     "typecheck:tests": "tsc -p tsconfig.test.json",
     "dev": "tsx watch src/server.ts",
     "build": "tsc",

@@ -37,6 +37,11 @@ before(async () => {
     const i = sessions.findIndex(s => s.tokenHash === query.tokenHash); if (i >= 0) sessions.splice(i, 1);
   });
   mock.method(Profile, 'findOne', async (query: any) => profiles.find(p => p.userId === query.userId && (!query._id || p._id === query._id)) ?? null);
+  mock.method(Profile, 'create', async (data: any) => {
+    calls.writes++;
+    if (profiles.some(p => p.userId === data.userId)) throw Object.assign(new Error('duplicate'), { code: 11000 });
+    const profile = { ...data, _id: new Types.ObjectId().toString(), revision: 0 }; profiles.push(profile); return profile;
+  });
   mock.method(Profile, 'findOneAndUpdate', async (query: any, update: any, options: any) => {
     calls.writes++;
     assert.equal(options.runValidators, true);
@@ -78,7 +83,7 @@ test('password hashes are salted and verify only the correct password', async ()
   assert.equal(await verifyPassword('wrong password', a), false); assert.equal(await verifyPassword('anything', 'malformed'), false);
 });
 test('every private endpoint rejects anonymous and malformed sessions before work', async () => {
-  for (const [path, method] of [['/upload', 'POST'], ['/me', 'GET'], ['/507f1f77bcf86cd799439011/export', 'GET'], ['/507f1f77bcf86cd799439011/optimize', 'POST'], ['/507f1f77bcf86cd799439011', 'DELETE']]) {
+  for (const [path, method] of [['', 'POST'], ['/upload', 'POST'], ['/me', 'GET'], ['/507f1f77bcf86cd799439011', 'PUT'], ['/507f1f77bcf86cd799439011/export', 'GET'], ['/507f1f77bcf86cd799439011/optimize', 'POST'], ['/507f1f77bcf86cd799439011', 'DELETE']]) {
     assert.equal((await request('/api/profile' + path, method)).status, 401);
     assert.equal((await request('/api/profile' + path, method, 'forged')).status, 401);
   }
@@ -121,8 +126,8 @@ test('oversized and additional files are rejected before parsing', async () => {
 test('upload persists extracted projects for the session owner and returns no raw text', async () => {
   const response = await upload(tokenA); assert.equal(response.status, 200);
   const data = await readData<SavedProfile>(response); profileId = data.profileId;
-  assert.deepEqual(data.projects, extracted.projects);
-  assert.deepEqual(profiles[0].projects, extracted.projects);
+  assert.equal(data.projects[0].title, extracted.projects[0].title);
+  assert.deepEqual(profiles[0].projects[0].techStack, extracted.projects[0].techStack);
   assert.equal(profiles[0].userId, users[0]._id.toString()); assert.equal(data.rawResumeText, undefined);
   assert.equal(data.slug, undefined);
   assert.equal(await readData(await request('/api/profile/me', 'GET', tokenB)), null);
