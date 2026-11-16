@@ -15,9 +15,9 @@ Rules:
 - Include both hard skills (e.g., "Python", "React", "AWS") and soft skills (e.g., "Leadership", "Agile").
 - Extract skills exactly as they appear or with minor normalization (e.g., "react.js" and "ReactJS" are fine).
 - Do NOT invent skills not present in the text.
-- Respond with ONLY a valid JSON array of strings. No markdown, no code fences, no explanation.
+- Respond with ONLY a JSON object with a skills property containing an array of strings. No markdown or explanation.
 
-Example output: ["Python", "React.js", "AWS", "Docker", "Agile", "SQL"]`;
+Example output: {"skills":["Python","React.js","AWS","Docker","Agile","SQL"]}`;
 
   const response = await groqClient.chat.completions.create({
     model: GROQ_MODEL,
@@ -26,10 +26,18 @@ Example output: ["Python", "React.js", "AWS", "Docker", "Agile", "SQL"]`;
       { role: 'user', content: `Extract all skills from this resume:\n\n${resumeText}` },
     ],
     temperature: 0.1,
-    max_tokens: 2048,
+    max_completion_tokens: 4096,
+    response_format: { type: 'json_object' },
+    ...(GROQ_MODEL.startsWith('openai/gpt-oss-')
+      ? { reasoning_effort: 'low' as const, include_reasoning: false }
+      : {}),
   });
 
-  const content = response.choices[0]?.message?.content;
+  const choice = response.choices[0];
+  if (choice?.finish_reason === 'length') {
+    throw new Error('Skill extraction response reached the output token limit');
+  }
+  const content = choice?.message?.content;
   if (!content) {
     throw new Error('LLM returned empty response during skill extraction');
   }
@@ -40,14 +48,16 @@ Example output: ["Python", "React.js", "AWS", "Docker", "Agile", "SQL"]`;
       .replace(/\s*```$/i, '')
       .trim();
 
-    const skills = JSON.parse(jsonStr);
-    if (!Array.isArray(skills)) {
-      throw new Error('Expected a JSON array of skills');
+    const parsed: unknown = JSON.parse(jsonStr);
+    if (!parsed || typeof parsed !== 'object' || !('skills' in parsed) || !Array.isArray(parsed.skills)) {
+      throw new Error('Expected a JSON object with a skills array');
     }
 
-    return skills.filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
+    return [...new Set(parsed.skills
+      .filter((skill): skill is string => typeof skill === 'string' && skill.trim().length > 0)
+      .map(skill => skill.trim()))];
   } catch (parseError) {
-    console.error('Failed to parse raw skills response:', content);
+    console.error('skill_extraction_invalid_response');
     throw new Error(
       `Failed to parse skill extraction result: ${parseError instanceof Error ? parseError.message : String(parseError)}`
     );
@@ -114,7 +124,7 @@ Examples:
 export async function normalizeSkillsFromResume(resumeText: string): Promise<string[]> {
   console.log('🔍 Step A: Extracting raw skills from resume...');
   const rawSkills = await extractRawSkills(resumeText);
-  console.log(`   Found ${rawSkills.length} raw skills:`, rawSkills);
+  console.log(`skill_extraction_complete count=${rawSkills.length}`);
 
   console.log('🎯 Steps B+C: Normalizing each skill via vector search + LLM...');
   const normalizedSkills: Set<string> = new Set();
@@ -129,13 +139,12 @@ export async function normalizeSkillsFromResume(resumeText: string): Promise<str
         try {
           // Step B: Vector search for top 3 matches
           const vectorMatches = await findSimilarSkills(rawSkill, 3);
-          console.log(`   "${rawSkill}" → top matches:`, vectorMatches.map((m) => `${m.skill}(${m.score.toFixed(2)})`));
 
           // Step C: LLM normalization
           const canonical = await normalizeSkill(rawSkill, vectorMatches);
           return canonical;
         } catch (error) {
-          console.warn(`   ⚠️ Failed to normalize skill "${rawSkill}":`, error);
+          console.warn('skill_normalization_failed');
           return null;
         }
       })
