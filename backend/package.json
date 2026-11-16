@@ -5,9 +5,11 @@
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
-    "test": "node --import tsx --test test/*.test.ts",
+    "test": "node --import tsx --import ./test/setup.mjs --test test/*.test.ts",
+    "typecheck:tests": "tsc -p tsconfig.test.json",
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
+    "prepare:embeddings": "node dist/scripts/prepareEmbeddings.js",
     "start": "node dist/server.js",
     "seed:skills": "tsx src/scripts/seedSkillTaxonomy.ts",
     "typecheck": "tsc --noEmit"

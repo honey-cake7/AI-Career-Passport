@@ -7,6 +7,7 @@ import { normalizeSkillsFromResume } from '../services/skillNormalizer.service.j
 import { Profile } from '../models/Profile.js';
 import { optimizeProfileForJob } from '../services/profileOptimizer.service.js';
 import { generateProfilePdf } from '../services/pdfGenerator.service.js';
+import { SkillPipelineError } from '../utils/skillPipeline.js';
 
 // ─── Multer Configuration ────────────────────────────────────
 
@@ -113,6 +114,11 @@ router.post('/upload', upload.single('resume'), async (req: Request, res: Respon
       },
     });
   } catch (error) {
+    if (error instanceof SkillPipelineError) {
+      res.setHeader('Retry-After', '30');
+      res.status(503).json({ success: false, error: error.message, code: 'SKILL_PIPELINE_UNAVAILABLE', stage: error.stage });
+      return;
+    }
     console.error('❌ Profile upload failed:', error);
 
     // Handle multer errors

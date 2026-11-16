@@ -8,13 +8,16 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies (including dev dependencies for build)
-RUN npm install
+RUN npm ci
 
 # Copy source code
 COPY . .
 
 # Build the TypeScript project
 RUN npm run build
+
+# Download and exercise the model during the build, so cold uploads need no model download.
+RUN npm run prepare:embeddings
 
 # Expose the API port
 EXPOSE 3001
