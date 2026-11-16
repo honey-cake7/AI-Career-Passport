@@ -8,11 +8,11 @@ interface ProfileViewerProps {
 }
 
 export const ProfileViewer: React.FC<ProfileViewerProps> = ({ profile: initialProfile }) => {
-  const [profile, setProfile] = useState<IProfile>(initialProfile);
+  const [profile, setProfile] = useState<IProfile>(() => structuredClone(initialProfile));
 
   const handleUpdate = (field: string, value: string | string[], category?: 'personalInfo' | 'experiences' | 'projects' | 'education', index?: number, subfield?: string) => {
     setProfile(prev => {
-      const updated = { ...prev };
+      const updated = structuredClone(prev);
       if (!category) {
         (updated as any)[field] = value;
       } else if (category === 'personalInfo') {
@@ -26,6 +26,7 @@ export const ProfileViewer: React.FC<ProfileViewerProps> = ({ profile: initialPr
 
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6 mt-8">
+      <p role="status" className="p-4 border border-amber-500/30 rounded-xl text-amber-200">Preview edits are not saved yet. Job analysis and PDF export use your saved uploaded profile.</p>
       {/* Header Card */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-panel p-8 relative overflow-hidden group">
         <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 transition-all duration-700 group-hover:bg-primary/20"></div>

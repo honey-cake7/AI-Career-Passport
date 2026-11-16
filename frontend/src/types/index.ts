@@ -33,9 +33,7 @@ export interface IProject {
 }
 
 export interface IProfile {
-  _id: string;
-  profileId?: string;
-  slug: string;
+  profileId: string;
   personalInfo: IPersonalInfo;
   experiences: IExperience[];
   education: IEducation[];

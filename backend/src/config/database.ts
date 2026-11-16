@@ -16,10 +16,10 @@ export async function connectDatabase(): Promise<void> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       await mongoose.connect(MONGODB_URI);
-      console.log(`✅ MongoDB connected successfully to: ${MONGODB_URI}`);
+      console.log('MongoDB connected');
       return;
     } catch (error) {
-      console.error(`❌ MongoDB connection attempt ${attempt}/${MAX_RETRIES} failed:`, error);
+      console.error(`MongoDB connection attempt ${attempt}/${MAX_RETRIES} failed`);
       if (attempt < MAX_RETRIES) {
         console.log(`   Retrying in ${RETRY_DELAY_MS / 1000}s...`);
         await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
@@ -38,7 +38,7 @@ export async function disconnectDatabase(): Promise<void> {
     await mongoose.disconnect();
     console.log('🔌 MongoDB disconnected gracefully');
   } catch (error) {
-    console.error('Error during MongoDB disconnect:', error);
+    console.error('mongodb_disconnect_failed');
   }
 }
 

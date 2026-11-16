@@ -12,18 +12,14 @@ import { PDFParse } from 'pdf-parse';
  * @returns The extracted text content as a string
  */
 export async function extractTextFromPdf(pdfBuffer: Buffer): Promise<string> {
+  const parser = new PDFParse({ data: new Uint8Array(pdfBuffer) });
   try {
-    // pdf-parse v2 accepts a Uint8Array via LoadParameters.data
-    const parser = new PDFParse({ data: new Uint8Array(pdfBuffer) });
-
     const textResult = await parser.getText();
 
     // textResult.text contains the concatenated text from all pages
     const rawText = textResult.text;
 
     if (!rawText || rawText.trim().length === 0) {
-      // Cleanup before throwing
-      await parser.destroy();
       throw new Error('No text content could be extracted from the PDF');
     }
 
@@ -36,14 +32,13 @@ export async function extractTextFromPdf(pdfBuffer: Buffer): Promise<string> {
 
     console.log(`📄 PDF parsed: ${cleanedText.length} chars extracted`);
 
-    // Release resources
-    await parser.destroy();
-
     return cleanedText;
   } catch (error) {
     if (error instanceof Error && error.message.includes('No text content')) {
       throw error;
     }
-    throw new Error(`Failed to parse PDF: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error('Failed to parse PDF');
+  } finally {
+    await parser.destroy();
   }
 }

@@ -24,6 +24,7 @@ const UserSchema = new Schema<IUser>(
     },
     passwordHash: {
       type: String,
+      select: false,
       required: [true, 'Password hash is required'],
     },
   },

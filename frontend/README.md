@@ -1,32 +1,9 @@
-# React + TypeScript + Vite
+# Career Passport frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React/TypeScript + Vite. See the [repository README](../README.md) for setup, API contracts and verified feature status.
 
-Currently, two official plugins are available:
+Copy `.env.example` to `.env`, install with `npm ci`, then run `npm run dev`. The local API defaults to `http://localhost:3001`; its `FRONTEND_URL` must match this frontend origin. Checks: `npm run lint` and `npm run build`.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Login credentials/session tokens and profile objects are not persisted in browser storage. Refresh requires login; the saved profile loads from the API after authentication. Inline preview corrections are not saved yet. Export and analysis use the saved uploaded profile. Public sharing and selectable export themes are unavailable.
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+The current dashboard design and accessibility need a dedicated UX milestone; compile/lint checks do not substitute for browser verification.

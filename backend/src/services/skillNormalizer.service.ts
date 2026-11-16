@@ -47,7 +47,7 @@ Example output: ["Python", "React.js", "AWS", "Docker", "Agile", "SQL"]`;
 
     return skills.filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
   } catch (parseError) {
-    console.error('Failed to parse raw skills response:', content);
+    console.error('skill_extraction_invalid_response');
     throw new Error(
       `Failed to parse skill extraction result: ${parseError instanceof Error ? parseError.message : String(parseError)}`
     );
@@ -114,7 +114,7 @@ Examples:
 export async function normalizeSkillsFromResume(resumeText: string): Promise<string[]> {
   console.log('🔍 Step A: Extracting raw skills from resume...');
   const rawSkills = await extractRawSkills(resumeText);
-  console.log(`   Found ${rawSkills.length} raw skills:`, rawSkills);
+  console.log(`skill_extraction_complete count=${rawSkills.length}`);
 
   console.log('🎯 Steps B+C: Normalizing each skill via vector search + LLM...');
   const normalizedSkills: Set<string> = new Set();
@@ -129,13 +129,12 @@ export async function normalizeSkillsFromResume(resumeText: string): Promise<str
         try {
           // Step B: Vector search for top 3 matches
           const vectorMatches = await findSimilarSkills(rawSkill, 3);
-          console.log(`   "${rawSkill}" → top matches:`, vectorMatches.map((m) => `${m.skill}(${m.score.toFixed(2)})`));
 
           // Step C: LLM normalization
           const canonical = await normalizeSkill(rawSkill, vectorMatches);
           return canonical;
         } catch (error) {
-          console.warn(`   ⚠️ Failed to normalize skill "${rawSkill}":`, error);
+          console.warn('skill_normalization_failed');
           return null;
         }
       })

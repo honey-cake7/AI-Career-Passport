@@ -1,5 +1,4 @@
-import dotenv from 'dotenv';
-dotenv.config();
+import 'dotenv/config';
 
 import app from './app.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
@@ -38,7 +37,7 @@ async function startServer(): Promise<void> {
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    console.error('server_start_failed');
     process.exit(1);
   }
 }

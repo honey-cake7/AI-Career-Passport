@@ -140,8 +140,8 @@ export const OptimizerTerminal: React.FC<OptimizerTerminalProps> = ({ profileId 
               <div className="glass-panel p-8 flex flex-col items-center justify-center text-center relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent to-surface/50 pointer-events-none"></div>
                 <AnimatedScore score={result.matchScore} />
-                <h4 className="text-lg font-medium text-white relative z-10">Overall Compatibility</h4>
-                <p className="text-xs text-slate-400 mt-2 relative z-10">Compared against target Job Description</p>
+                <h4 className="text-lg font-medium text-white relative z-10">AI estimate</h4>
+                <p className="text-xs text-slate-400 mt-2 relative z-10">Unvalidated model opinion, not a hiring probability. Check every suggestion against your actual experience.</p>
               </div>
 
               <div className="glass-panel p-6">

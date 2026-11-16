@@ -1,59 +1,33 @@
-import React, { useState } from 'react';
-import { Download, Link as LinkIcon, CheckCircle2, Paintbrush } from 'lucide-react';
-import { API_BASE_URL } from '../api/axios';
+import { useState } from 'react';
+import { apiClient } from '../api/axios';
 
-interface ExportControlsProps {
-  profileId: string;
-  slug: string;
-}
-
-export const ExportControls: React.FC<ExportControlsProps> = ({ profileId, slug }) => {
-  const [copied, setCopied] = useState(false);
-  const [theme, setTheme] = useState('modern');
-
-  const handleCopyLink = () => {
-    const url = `${API_BASE_URL}/api/profile/public/${slug}`;
-    navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleDownload = () => {
-    // Open the download link directly to trigger the browser's save file prompt
-    window.open(`${API_BASE_URL}/api/profile/${profileId}/export?theme=${theme}`, '_blank');
-  };
-
-  return (
-    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 glass-panel pl-2 pr-6 py-2 flex items-center gap-4 z-50 shadow-[0_10px_40px_rgba(59,130,246,0.15)] border border-primary/20 rounded-full">
-      
-      <div className="flex items-center gap-2 bg-surface/50 rounded-full px-4 py-2 border border-white/5">
-        <Paintbrush className="w-4 h-4 text-slate-400" />
-        <select 
-          value={theme}
-          onChange={(e) => setTheme(e.target.value)}
-          className="bg-transparent text-sm text-slate-200 outline-none cursor-pointer appearance-none font-medium"
-        >
-          <option value="minimalist">Minimalist</option>
-          <option value="modern">Modern</option>
-          <option value="executive">Executive</option>
-        </select>
-      </div>
-
-      <button 
-        onClick={handleCopyLink}
-        className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition-colors pr-4 border-r border-white/10"
-      >
-        {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <LinkIcon className="w-4 h-4" />}
-        {copied ? 'Copied!' : 'Share'}
-      </button>
-      
-      <button 
-        onClick={handleDownload}
-        className="flex items-center gap-2 text-sm font-bold text-primary hover:text-primary/80 transition-colors"
-      >
-        <Download className="w-4 h-4" />
-        Export PDF
-      </button>
+export function ExportControls({ profileId, onDeleted }: { profileId: string; onDeleted: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function download() {
+    setBusy(true); setError('');
+    try {
+      const response = await apiClient.get(`/api/profile/${profileId}/export`, { responseType: 'blob' });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url; link.download = 'resume.pdf'; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch { setError('Unable to download PDF. Please try again.'); }
+    finally { setBusy(false); }
+  }
+  async function remove() {
+    if (!window.confirm('Delete your saved profile? This cannot be undone.')) return;
+    setBusy(true); setError('');
+    try { await apiClient.delete(`/api/profile/${profileId}`); onDeleted(); }
+    catch { setError('Unable to delete profile. Please try again.'); }
+    finally { setBusy(false); }
+  }
+  return <section className="p-6 border border-white/10 rounded-xl space-y-4">
+    <p className="text-sm text-slate-300">Your profile is private. Public sharing is unavailable while consent and revocation controls are being built. PDF export uses the saved profile; preview edits are not saved yet.</p>
+    <div className="flex flex-wrap gap-4">
+      <button disabled={busy} onClick={() => { void download(); }} className="btn-primary">Export saved PDF</button>
+      <button disabled={busy} onClick={() => { void remove(); }} className="btn-secondary">Delete saved profile</button>
     </div>
-  );
-};
+    {error && <p role="alert" className="text-red-300">{error}</p>}
+  </section>;
+}

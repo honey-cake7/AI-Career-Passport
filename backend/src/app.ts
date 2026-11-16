@@ -1,55 +1,43 @@
 import express from 'express';
 import cors from 'cors';
+import multer from 'multer';
 import profileRoutes from './routes/profile.routes.js';
+import authRoutes from './routes/auth.routes.js';
+import { rateLimit } from './security/rateLimit.js';
 
-const app = express();
-
-// ─── Global Middleware ───────────────────────────────────────
-
-const allowedOrigins = [
-  'http://localhost:5173',
-  'https://ai-career-passport.vercel.app',
-  process.env.FRONTEND_URL
-].filter(Boolean) as string[];
-
-app.use(cors({
-  origin: allowedOrigins,
-  credentials: true,
-}));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// ─── Routes ──────────────────────────────────────────────────
-
-app.use('/api/profile', profileRoutes);
-
-// ─── Health Check ────────────────────────────────────────────
-
-app.get('/api/health', (_req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: Date.now(),
-    environment: process.env.NODE_ENV || 'development'
+export function createApp(profileRouter = profileRoutes) {
+  const app = express();
+  app.disable('x-powered-by');
+  const allowedOrigins = process.env.FRONTEND_URL
+    ? [new URL(process.env.FRONTEND_URL).origin]
+    : process.env.NODE_ENV === 'production' ? [] : ['http://localhost:5173'];
+  app.use(cors({ origin: allowedOrigins, allowedHeaders: ['Content-Type', 'Authorization'] }));
+  app.use((_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    next();
   });
-});
-
-// ─── 404 Handler ─────────────────────────────────────────────
-
-app.use((_req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'Route not found',
+  app.use('/api', rateLimit(200, 60 * 1000));
+  app.use(express.json({ limit: '32kb' }));
+  app.use('/api/auth', authRoutes);
+  app.use('/api/profile', profileRouter);
+  app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+  app.use((_req, res) => { res.status(404).json({ success: false, error: 'Route not found' }); });
+  app.use((err: Error & { status?: number }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (err instanceof multer.MulterError) {
+      res.status(err.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({
+        success: false, error: 'Upload one PDF up to 10 MB; additional fields are not accepted',
+      });
+      return;
+    }
+    if (err.status === 400 || err.status === 413) {
+      res.status(err.status).json({ success: false, error: 'Invalid or oversized request body' });
+      return;
+    }
+    console.error('request_failed');
+    res.status(500).json({ success: false, error: 'Unable to complete request. Please try again.' });
   });
-});
-
-// ─── Global Error Handler ────────────────────────────────────
-
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({
-    success: false,
-    error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message,
-  });
-});
-
-export default app;
+  return app;
+}
+export default createApp();

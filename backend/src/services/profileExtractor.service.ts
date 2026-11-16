@@ -106,7 +106,7 @@ Rules:
       projects: Array.isArray(parsed.projects) ? parsed.projects : [],
     };
   } catch (parseError) {
-    console.error('Failed to parse LLM profile extraction response:', content);
+    console.error('profile_extraction_invalid_response');
     throw new Error(
       `Failed to parse profile extraction result: ${parseError instanceof Error ? parseError.message : String(parseError)}`
     );

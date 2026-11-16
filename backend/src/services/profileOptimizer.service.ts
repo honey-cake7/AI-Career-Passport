@@ -72,10 +72,10 @@ ${jobDescription}
     const responseContent = chatCompletion.choices[0]?.message?.content || '{}';
     const result: IOptimizationResult = JSON.parse(responseContent);
 
-    console.log(`✅ Optimization complete (Match Score: ${result.matchScore}%)`);
+    console.log('profile_optimization_complete');
     return result;
   } catch (error) {
-    console.error('❌ Failed to optimize profile:', error);
+    console.error('profile_optimization_failed');
     throw new Error('Failed to generate profile optimization matrix.');
   }
 }

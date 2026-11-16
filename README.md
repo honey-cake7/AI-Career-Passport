@@ -1,122 +1,103 @@
-<div align="center">
-  <img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React" />
-  <img src="https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js" />
-  <img src="https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white" alt="MongoDB" />
-  <img src="https://img.shields.io/badge/Docker-2CA5E0?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
-</div>
+# AI Career Passport
 
-<br />
+Understand what your resume shows—and what a job requires.
 
-<div align="center">
-  <h1 align="center">🚀 AI-Powered Profile Engine & Data Normalizer</h1>
-  <p align="center">
-    <strong>Solving the dirty data problem in recruitment tech.</strong>
-    <br />
-    An enterprise-grade AI SaaS prototype that transforms chaotic, unstructured PDF resumes into perfectly structured, canonical JSON profiles optimized for any Job Description.
-  </p>
-</div>
+An existing React/TypeScript, Express, MongoDB and Qdrant prototype being improved on `feat/career-passport-v2`. This is development work; the full evidence-based career platform is not yet production-ready. AI-assisted changes and their validation are documented so the owner can review and maintain them.
 
-<hr />
+## Current behavior
 
-## 🌐 Live Demo
-
-- **Frontend Application (Vercel):** [https://ai-career-passport.vercel.app](https://ai-career-passport.vercel.app)
-- **Backend API (Render):** [https://ai-career-passport.onrender.com/api/health](https://ai-career-passport.onrender.com/api/health)
-
-## ✨ Key Features
-
-- **🧠 RAG Normalization Pipeline**: Uses a local Qdrant Vector Database and `fastembed` to map messy, raw user skills (e.g. "reactjs", "react.js") to an industry-standard canonical taxonomy.
-- **🕵️ AI Recruiter Agent**: Powered by LLaMA-3 (via Groq), this agent evaluates parsed experiences and projects against target Job Descriptions, returning intelligent Match Scores and highly optimized, metric-driven resume bullets.
-- **📄 Robust Resume Parsing**: Extracts structured personal info, work experience, education, and projects from raw PDF text with near-perfect accuracy using zero-shot prompt engineering.
-- **🎨 Glassmorphism Dashboard**: A premium, animated React frontend featuring inline-editing capabilities, AI status tracking, and side-by-side RAG visualizers.
-- **📥 PDF Export**: Compiles the newly AI-optimized profile into a clean, ATS-friendly PDF document with selectable themes.
-
-## 📐 Architecture Diagram
-
-```mermaid
-flowchart TD
-    A[Frontend React UI] -->|Uploads PDF Resume| B(Express Server API)
-    B --> C{pdf-parse}
-    C -->|Raw Text| D[Groq AI Extractor]
-    D -->|Parsed Profile JSON| B
-    C -->|Raw Text Skills| E[Vector Service]
-    E -->|fastembed BGE-Small| F[(Qdrant Vector DB)]
-    F -->|Cosine Similarity Match| E
-    E -->|Canonical Skills| B
-    B -->|Persists Document| G[(MongoDB)]
-    G --> B
-    B -->|Returns JSON| A
-    
-    H[Recruiter Terminal] -->|Job Description| B
-    B -->|Profile + JD| I[Groq AI Optimizer]
-    I -->|Match Score & Rewrites| B
-    B -->|Optimization Matrix| H
-```
-
-## 🛠️ Tech Stack
-
-| Category | Technologies |
+| Capability | Status |
 | --- | --- |
-| **Frontend** | React, Vite, TypeScript, Tailwind CSS, Framer Motion, Lucide React, Axios |
-| **Backend** | Node.js, Express, TypeScript, Mongoose, Multer, PDFKit, pdf-parse |
-| **AI / ML** | Groq API (LLaMA-3-70B), ONNX Runtime (`fastembed`), RAG Pipeline |
-| **Infrastructure** | Vercel (Frontend), Render (Backend via Docker), Qdrant Cloud (Vector DB), MongoDB Atlas |
+| Account registration/login/logout | Implemented: salted scrypt passwords and one-hour revocable Mongo sessions. Browser token is memory-only; refresh requires login. |
+| Private profile ownership | Session-derived owner; owner-scoped upload, retrieval, AI analysis, PDF export and profile deletion. |
+| Resume PDF upload | One PDF up to 10 MB, MIME/signature/text bounds. Groq extracts structured fields; FastEmbed/Qdrant help normalize skills. Full model-output validation and parsing resource isolation remain incomplete. |
+| Profile persistence | Personal info, experience, education, projects and skills persist. New uploads do not retain raw resume text. |
+| Review/edit | Preview edits only. They are **not saved**; analysis/export use the saved uploaded profile. Persistent correction is a priority follow-up. |
+| Job analysis | Existing Groq-generated suggestions and an unvalidated model score. It is **not a hiring probability** or a validated scoring system. Review suggestions for mistakes and invented claims. |
+| PDF export | One PDFKit layout from the saved profile; projects included. No selectable themes or approved rewrite/version export yet. |
+| Public sharing | Disabled: legacy links exposed contact data without explicit consent. |
+| Resume versions/application tracking | Planned; not implemented. |
 
-## 🚀 Getting Started (Local Development)
+See the [technical audit](docs/architecture/AUDIT.md), [phased roadmap](docs/architecture/ROADMAP.md), [architecture decisions](docs/architecture/DECISIONS.md) and [first milestone report](docs/architecture/MILESTONE-1.md). Roadmap items are not claims of implemented features.
 
-Follow these instructions to run the full stack locally via Docker and Vite.
+## Run locally
 
-### 1. Clone the Repository
+Use Node.js 24 and npm with MongoDB and Qdrant available locally. The repository includes separate backend/frontend lockfiles.
+
 ```bash
-git clone https://github.com/yourusername/ai-career-passport.git
-cd ai-career-passport
+git clone https://github.com/honey-cake7/AI-Career-Passport.git
+cd AI-Career-Passport
+git switch feat/career-passport-v2
 ```
 
-### 2. Environment Setup
-Navigate to the `backend` directory and set up your environment variables:
+Create `backend/.env` from `backend/.env.example` and `frontend/.env` from `frontend/.env.example`. Set your own local MongoDB URI, Qdrant URL/key and Groq key. Set `FRONTEND_URL=http://localhost:5173` and `VITE_API_BASE_URL=http://localhost:3001`. Never commit `.env` files or use production credentials for tests.
+
 ```bash
 cd backend
-cp .env.example .env
-```
-Open `.env` and fill in your keys:
-- `GROQ_API_KEY`: Get this from your [Groq Console](https://console.groq.com/).
-- `MONGODB_URI`: Defaults to `mongodb://localhost:27017/ai-career-passport` if using the local docker-compose setup.
-
-### 3. Start Backend Infrastructure
-Ensure Docker Desktop is running, then spin up the backend API, MongoDB, and Qdrant vector database:
-```bash
-# Still in the /backend directory
-npm install
-docker compose up --build -d
-```
-*(Note: Initial setup might take a minute as Docker downloads the necessary MongoDB and Qdrant images).*
-
-### 4. Seed the Vector Database
-Once the containers are running, you must seed Qdrant with the canonical skill taxonomy so the RAG pipeline has targets to match against.
-```bash
-npm run seed:skills
-```
-
-### 5. Start the Frontend Dashboard
-Open a **new** terminal window, navigate to the frontend directory, and start the Vite dev server:
-```bash
-cd frontend
-npm install
+npm ci
 npm run dev
 ```
-Open `http://localhost:5173` in your browser to view the application!
 
-## 🧪 Core Data Flow (The Secret Sauce)
+In a second terminal:
 
-Why go through the trouble of a RAG pipeline just for skills?
+```bash
+cd frontend
+npm ci
+npm run dev
+```
 
-In recruitment tech, data consistency is the biggest bottleneck. A candidate might write `"Reactjs"`, `"React.js"`, `"React JS"`, or just `"React"`. Searching a traditional database for these variations requires incredibly complex regex matching.
+Open `http://localhost:5173`, create an account and upload a synthetic resume first. Upload sends extracted resume text to Groq; review the provider's retention terms before using personal data. Text is processed in memory and structured profile data is saved in MongoDB. Local FastEmbed may download its model on first normalization. Seeded taxonomy data is required for useful Qdrant matches.
 
-By utilizing **Retrieval-Augmented Generation (RAG)** via Qdrant, we solve this programmatically:
-1. We take a chaotic skill extracted by the LLM (e.g., `"reactjs"`).
-2. We embed it locally using `fastembed` into a dense vector space (384 dimensions).
-3. We query our pre-seeded Qdrant Vector DB for the closest spatial match.
-4. Qdrant returns `"React.js"` (the canonical, industry-standard term).
+The existing `backend/docker-compose.yml` is a **development example**; its images, DB port bindings and backend Dockerfile still need hardening. If using it locally, supply the same Groq/environment values and run `docker compose up --build` from `backend`. No production deployment is part of this milestone.
 
-The resulting MongoDB document contains perfectly clean, normalized data arrays ready for high-performance indexing and algorithmic matching.
+**Taxonomy seed caution:** `npm run seed:skills` currently deletes/recreates the configured Qdrant collection. Use a disposable local collection only. A non-destructive versioned seed is planned. Do not point this command at shared or production data.
+
+## Checks
+
+Backend:
+
+```bash
+cd backend
+npm run typecheck
+npm run typecheck:tests
+npm run build
+npm test
+npm run test:integration
+```
+
+The fast HTTP/security suite replaces database methods and expensive services with synthetic doubles. The integration suite creates a disposable local MongoDB process, exercises real persistence and PDF generation/parsing, and replaces only model-dependent extraction/normalization/optimization. First run may download a large MongoDB binary; it never reads `MONGODB_URI` or contacts production databases. No Groq key, Qdrant server, model download or paid inference is needed for these suites. Live AI quality is not established by them.
+
+Frontend:
+
+```bash
+cd frontend
+npm run lint
+npm run build
+```
+
+Recorded results and limitations are in the milestone report. There is not yet a complete browser/accessibility/AI evaluation CI pipeline.
+
+## API boundary
+
+Authenticate using `Authorization: Bearer <token>` returned by registration/login. Use TLS outside localhost. No user ID is accepted from the client for ownership.
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| POST | `/api/auth/register` | `{ email, password }`, password 12–128 characters; returns one-hour session. |
+| POST | `/api/auth/login` | Verify credentials and issue a new session. |
+| POST | `/api/auth/logout` | Revoke current session. |
+| GET | `/api/profile/me` | Current owner's saved profile or `null`. |
+| POST | `/api/profile/upload` | One multipart `resume` PDF; extra text/ownership fields rejected. |
+| POST | `/api/profile/:profileId/optimize` | Owner-only; `{ jobDescription }` with 1–20,000 characters. |
+| GET | `/api/profile/:profileId/export` | Owner-only saved-profile PDF. |
+| DELETE | `/api/profile/:profileId` | Delete owner's saved profile, including private fields. |
+| GET | `/api/profile/public/:slug` | Always 404; legacy public disclosure disabled. |
+| GET | `/api/health` | Process liveness only; does not prove dependency readiness. |
+
+Unauthorized private requests return 401; missing/foreign profiles return the same 404. Responses are no-store. CORS permits only the configured frontend origin (localhost in development by default). Rate limits are per API process and conservative IP/account limits; multi-instance quotas and trusted-proxy configuration remain release work.
+
+## Privacy and release boundaries
+
+New uploads stop retaining raw text and logs omit resume/model content and connection strings. Existing raw-text records, provider retention, backups and browser caches on devices that never open the updated app are not purged by a code change. Legacy shared-ID profiles cannot safely be claimed from resume email; no automatic migration is attempted. Profile deletion is implemented; account deletion, password recovery, email verification and consent-based public sharing remain open.
+
+Development-branch pushes are authorized. Merging to main and production deployment require separate owner approval. No claim of near-perfect extraction, ATS certification, guaranteed hiring outcomes or production security is made.

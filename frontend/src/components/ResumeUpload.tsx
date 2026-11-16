@@ -53,7 +53,6 @@ export const ResumeUpload: React.FC<ResumeUploadProps> = ({ onUploadSuccess }) =
 
     const formData = new FormData();
     formData.append('resume', file);
-    formData.append('userId', '507f1f77bcf86cd799439011'); // Dummy user ID
 
     try {
       const response = await apiClient.post('/api/profile/upload', formData, {
@@ -79,7 +78,7 @@ export const ResumeUpload: React.FC<ResumeUploadProps> = ({ onUploadSuccess }) =
           Initialize Your Passport
         </h2>
         <p className="text-slate-400 text-lg">
-          Upload your resume PDF. Our RAG-powered engine will extract, normalize, and vectorize your skills instantly.
+          Upload a PDF up to 10 MB. Its text is sent to Groq for AI processing. Your structured profile is saved privately; review AI output for mistakes.
         </p>
       </div>
 

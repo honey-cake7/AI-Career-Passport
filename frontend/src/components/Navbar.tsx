@@ -35,7 +35,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onClearProfile }) => {
             className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-full border border-red-500/20 transition-colors text-sm font-medium ml-2"
           >
             <LogOut className="w-4 h-4" />
-            Reset
+            Sign out
           </button>
         )}
         
