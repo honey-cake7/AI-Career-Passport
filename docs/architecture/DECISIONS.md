@@ -1,6 +1,18 @@
 # Architecture decisions
 
-Updated: 2026-11-17. Baseline context and evidence: [AUDIT.md](AUDIT.md). ADR-008 supersedes the preview-only behavior and upload replacement described in earlier M1 decisions; JSON body size is now 256 KiB for bounded full-document saves. ADR-011 supersedes earlier decisions to keep the legacy optimizer operational.
+Updated: 2026-11-18. Baseline context and evidence: [AUDIT.md](AUDIT.md). ADR-008 supersedes the preview-only behavior and upload replacement described in earlier M1 decisions; JSON body size is now 256 KiB for bounded full-document saves. ADR-011 supersedes earlier decisions to keep the legacy optimizer operational.
+
+## ADR-015 — Consented, bounded wording proposals before explicit draft acceptance
+
+**Status:** accepted for the wording-review milestone. Extends ADR-009's line ordering with conservative concision edits; general generated paraphrasing remains deferred.
+
+An owner-only POST derives a single project/experience description and included skill requirement from the saved job version. Require document revision, analysis timestamp and explicit consent. Recompute evidence locally instead of trusting an earlier positive status. Reject summary/claim-only/missing/uncertain/excluded requirements and descriptions over 4,000 characters. Only the description's lines and one requirement term/quote reach Groq; contact fields, section titles/company names, full JD and other sections are omitted. The description may itself contain sensitive information, so preview it before per-request consent. Manual editing, matching, save and PDF export continue without this optional provider call.
+
+Use one 20-second, no-retry request with a 2,048 completion-token cap. Accept strict JSON with zero or one `{lineIndex, proposed}` edit. The server copies all surrounding lines. A small documented phrase-equivalence list, article normalization and punctuation changes are allowed; all other word tokens must remain in sequence. Separately preserve quantity formatting and meaningful symbols. This rejects added technologies, metrics, ownership verbs, removed qualifications/negation and reordered factual tokens. It intentionally rejects many fluent paraphrases. Empty output is a valid no-suggestion result; malformed/truncated/unsupported output fails as a whole with a safe error. There is no automatic repair or second-model verification claim.
+
+Lexical constraints cannot prove truth or semantic equivalence: articles, punctuation and context can still alter meaning. Do not describe them as a factuality guarantee. Show original/proposed text and the related source quote; require a factual-meaning confirmation before explicit acceptance into the draft. Manual proposal edits reset that confirmation and remain the user's own claims. The existing editor checks source text and label again before applying, then its revision-checked save and local coverage reassessment apply. No generated or rejected text reaches MongoDB/PDF automatically. Missing evidence receives deterministic questions and the existing practice-plan/editor path, never model-invented answers.
+
+Reuse existing authentication, owner predicates, AI rate limit and per-account admission shared with JD extraction. Recheck owner/version/review after inference; concurrent saves or deletion discard the result. Proposals and decisions are ephemeral browser state, with navigation protection and explicit stale-source reload. Only accepted, explicitly saved text persists; this is not an immutable approval or version-history record. Do not add a collection/schema migration, background worker, vector model or production dependency. Token usage and redacted event counts/durations are available without logging text or provider exceptions. Shared quotas/deletion fencing and live provider quality evaluation remain release gates.
 
 ## ADR-014 — Editable requirements and deterministic text coverage
 

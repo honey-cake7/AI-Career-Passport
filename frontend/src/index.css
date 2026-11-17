@@ -159,6 +159,16 @@ select { display: block; width: 100%; margin: 8px 0 16px; padding: .7rem; border
 .requirement-edit textarea { min-height: 80px; }
 .requirements-editor form > fieldset > .hint { margin-top: 16px; }
 .requirements-editor .actions { margin-top: 18px; }
+.wording-review { margin-top: 26px; padding-top: 22px; border-top: 1px solid #cdd5c6; }
+.wording-review p, .wording-review label { margin: 14px 0; }
+.wording-review blockquote { margin: 14px 0; border-left: 2px solid #b6c6ae; padding-left: 12px; font-size: .82rem; }
+.wording-review fieldset > button { margin-top: 16px; }
+.wording-result { margin-top: 24px; padding: 16px; border: 1px solid #b9c9b2; background: #fffefa; border-radius: 4px; }
+.wording-result h4 { font-size: .85rem; margin: 0 0 8px; }
+.wording-comparison { display: grid; gap: 16px; margin-top: 20px; }
+.wording-comparison > div { min-width: 0; }
+.wording-result .actions { margin-top: 16px; }
+.evidence-question { font-size: .85rem; }
 @media (min-width: 951px) { .document-aside:has(.job-review) { position: static; } }
 @media (max-width: 950px) { .document-aside:has(.job-review) { order: -1; } }
 @media (max-width: 650px) { .job-start-grid { grid-template-columns: minmax(0, 1fr); } .job-create, .version-list, .job-review { padding: 20px; } .version-context { flex-wrap: wrap; } }

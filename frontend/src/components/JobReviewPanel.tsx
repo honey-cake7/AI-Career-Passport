@@ -6,6 +6,7 @@ import { PlanChooser, SavedGapPlans } from './GapPlans';
 import { evidenceLabels as statusLabels, useGapPlans } from '../hooks/useGapPlans';
 import { JobCoverage } from './JobCoverage';
 import { RequirementsEditor } from './RequirementsEditor';
+import { WordingReview } from './WordingReview';
 
 
 function Suggestion({ suggestion, apply, disabled }: { suggestion: EditSuggestion; apply: (s: EditSuggestion) => boolean; disabled: boolean }) {
@@ -29,15 +30,17 @@ export function JobReviewPanel({ version, path, dirty, busy, apply, onPlanDirty,
   const [planDirty, setPlanDirty] = useState(false);
   const [requirementsDirty, setRequirementsDirty] = useState(false);
   const [requirementsBusy, setRequirementsBusy] = useState(false);
+  const [wordingDirty, setWordingDirty] = useState(false);
+  const [wordingBusy, setWordingBusy] = useState(false);
   const plans = useGapPlans(version, path, setPlanDirty);
   const [review, setReview] = useState<JobReview | null>(version.analysis);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  useEffect(() => { onPlanDirty(planDirty || requirementsDirty); }, [planDirty, requirementsDirty, onPlanDirty]);
+  useEffect(() => { onPlanDirty(planDirty || requirementsDirty || wordingDirty); }, [planDirty, requirementsDirty, wordingDirty, onPlanDirty]);
   useEffect(() => () => onPlanDirty(false), [onPlanDirty]);
-  useEffect(() => { onReviewBusy(loading || requirementsBusy || plans.busy); }, [loading, requirementsBusy, plans.busy, onReviewBusy]);
+  useEffect(() => { onReviewBusy(loading || requirementsBusy || plans.busy || wordingBusy); }, [loading, requirementsBusy, plans.busy, wordingBusy, onReviewBusy]);
   useEffect(() => () => onReviewBusy(false), [onReviewBusy]);
   async function analyze() {
     setLoading(true); setError('');
@@ -58,17 +61,18 @@ export function JobReviewPanel({ version, path, dirty, busy, apply, onPlanDirty,
     {dirty && <p className="hint">Save your edits before requesting an updated review. Any review below refers to the previously saved content.</p>}
     {error && <p className="error" role="alert">{error}</p>}
     {review?.coverage && <JobCoverage coverage={review.coverage} dirty={dirty || requirementsDirty} />}
-    <RequirementsEditor key={review?.generatedAt ?? 'manual'} review={review} version={version} path={path} blocked={busy || dirty || loading || planDirty || plans.busy} onDirty={setRequirementsDirty} onBusy={setRequirementsBusy} onSaved={onRequirementsSaved} />
+    <RequirementsEditor key={review?.generatedAt ?? 'manual'} review={review} version={version} path={path} blocked={busy || dirty || loading || planDirty || plans.busy || wordingBusy || wordingDirty} onDirty={setRequirementsDirty} onBusy={setRequirementsBusy} onSaved={onRequirementsSaved} />
     {review && <div className="review-results"><p className="hint">Check the quoted context and priority, and correct missed requirements above. Comparison uses exact terms and a small alias list; it can miss equivalent wording. Saving resume edits recalculates this review locally.</p>
       {review.requirements.map(r => <article key={r.id} className={`requirement-card ${r.status}`}><span className="requirement-status">{r.excluded ? 'Excluded from comparison' : statusLabels[r.status]}</span><h3>{r.label}</h3><p className="hint">Priority: {r.priority} · {r.origin === 'user' ? 'Added by you' : r.original ? 'Edited by you · original extraction retained' : 'Extracted from job description'}</p><blockquote>{r.quote}</blockquote>
         {r.original && <details><summary>Original extracted requirement</summary><p className="quoted-text">{r.original.label} · {r.original.priority}<br />{r.original.quote}</p></details>}
         {review.coverage?.duplicates.some(d => d.id === r.id) && <p className="hint">Repeated skill name: counted once under its strongest included priority.</p>}
         {r.evidence.map(e => <details key={e.id}><summary>{e.label}</summary><p className="quoted-text">{e.text}</p></details>)}
-        {!r.excluded && !review.coverage?.duplicates.some(d => d.id === r.id) && <details><summary>{r.status === 'work_mention' ? 'Prepare an example' : 'Choose a next step'}</summary><p>{r.action}</p>{r.status === 'not_found' && <p className="hint">A missing mention is not proof of a missing skill. Add real experience if you have it; otherwise complete and test a small project task before claiming it.</p>}<PlanChooser requirement={r} controls={plans} disabled={busy || dirty || loading || requirementsBusy || requirementsDirty} /></details>}
+        {!r.excluded && !review.coverage?.duplicates.some(d => d.id === r.id) && <details><summary>{r.status === 'work_mention' ? 'Prepare an example' : 'Choose a next step'}</summary><p>{r.action}</p>{r.status === 'not_found' && <p className="hint">A missing mention is not proof of a missing skill. Add real experience if you have it; otherwise complete and test a small project task before claiming it.</p>}<PlanChooser requirement={r} controls={plans} disabled={busy || dirty || loading || requirementsBusy || requirementsDirty || wordingBusy || wordingDirty} /></details>}
       </article>)}
       <div className="suggestions-heading"><h3>Suggested changes</h3><p className="hint">These bring relevant existing lines first. They do not generate new achievements. You can edit wording before using a suggestion.</p></div>
-      {review.suggestions.length ? review.suggestions.map(s => <Suggestion key={s.id} suggestion={s} apply={apply} disabled={busy || loading || requirementsBusy || requirementsDirty} />) : <p className="hint">No safe line-reordering suggestions found. Use the requirements above to make factual edits in the document.</p>}
+      {review.suggestions.length ? review.suggestions.map(s => <Suggestion key={s.id} suggestion={s} apply={apply} disabled={busy || loading || requirementsBusy || requirementsDirty || wordingBusy || wordingDirty} />) : <p className="hint">No safe line-reordering suggestions found. Use the requirements above to make factual edits in the document.</p>}
+      <WordingReview key={review.generatedAt} version={version} review={review} path={path} resumeDirty={dirty} blocked={busy || loading || requirementsBusy || requirementsDirty || planDirty || plans.busy} apply={apply} onDirty={setWordingDirty} onBusy={setWordingBusy} onReload={onRequirementsSaved} focusEvidence={focusEvidence} />
     </div>}
-    <SavedGapPlans controls={plans} version={version} disabled={busy || loading || requirementsBusy || requirementsDirty} resumeDirty={dirty} focusEvidence={focusEvidence} />
+    <SavedGapPlans controls={plans} version={version} disabled={busy || loading || requirementsBusy || requirementsDirty || wordingBusy || wordingDirty} resumeDirty={dirty} focusEvidence={focusEvidence} />
   </section>;
 }

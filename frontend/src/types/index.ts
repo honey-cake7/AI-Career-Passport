@@ -55,6 +55,12 @@ export interface SkillNormalization {
 export interface EditSuggestion {
   id: string; sourceId: string; sourceLabel: string; original: string; proposed: string; reason: string;
 }
+export interface WordingResult {
+  revision: number; reviewedAt: string; generatedAt: string;
+  suggestion: EditSuggestion | null;
+  requirement: { id: string; label: string; quote: string };
+  usage: JobReview['usage'];
+}
 export interface JobReview {
   schemaVersion: 1; revision: number; generatedAt: string;
   requirements: {

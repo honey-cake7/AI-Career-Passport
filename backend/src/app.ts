@@ -8,6 +8,7 @@ import { SkillPipelineError } from './utils/skillPipeline.js';
 import { ResumeInputError } from './validation/resume.js';
 import { JobReviewError } from './services/jobReviewError.js';
 import { AccountUnavailableError } from './security/accountAccess.js';
+import { WordingError } from './services/wordingError.js';
 
 export function createApp(profileRouter = profileRoutes) {
   const app = express();
@@ -35,7 +36,7 @@ export function createApp(profileRouter = profileRoutes) {
     if (err instanceof ResumeInputError) {
       res.status(400).json({ success: false, error: err.message }); return;
     }
-    if (err instanceof JobReviewError) {
+    if (err instanceof JobReviewError || err instanceof WordingError) {
       res.status(503).json({ success: false, code: err.code, error: err.message }); return;
     }
     if (err instanceof SkillPipelineError) {

@@ -10,6 +10,7 @@ import { createGapPlanRouter } from './gapPlan.routes.js';
 import { applySkillReviews, normalizationProvider, withSkillReview } from '../services/skillReview.js';
 import { reassessReview, withCoverage } from '../services/jobCoverage.js';
 import { createRequirementsRouter } from './requirements.routes.js';
+import { createWordingRouter, wordingProvider } from './wording.routes.js';
 
 const defaults = {
   review: async (...args: Parameters<typeof import('../services/jobReviewProvider.js').reviewJob>) => {
@@ -24,7 +25,7 @@ function baseContent(profile: IProfile) {
     education: plain.education, projects: plain.projects, skills: plain.skills });
 }
 
-export function createVersionRouter(deps = defaults, normalize = normalizationProvider) {
+export function createVersionRouter(deps = defaults, normalize = normalizationProvider, wording = wordingProvider) {
   const router = Router({ mergeParams: true });
   const aiLimit = rateLimit(10, 15 * 60 * 1000);
   // Per-process admission prevents multiple paid reviews for one account at once.
@@ -63,6 +64,7 @@ export function createVersionRouter(deps = defaults, normalize = normalizationPr
   router.get('/:versionId', (_req, res) => { res.json({ success: true, data: versionData(res.locals.version) }); });
   router.use('/:versionId/plans', createGapPlanRouter());
   router.use('/:versionId/requirements', createRequirementsRouter());
+  router.use('/:versionId/wording', aiLimit, createWordingRouter(wording, reviewing));
   router.put('/:versionId', async (req, res) => {
     const input = parseResumeSave(req.body);
     const v: IResumeVersion = res.locals.version;

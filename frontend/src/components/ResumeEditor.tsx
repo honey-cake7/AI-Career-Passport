@@ -64,7 +64,7 @@ export function ResumeEditor({ profile, onSaved, onDeleted, onDirty, resourcePat
   }
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (planDirty && !window.confirm('Save the resume and discard unsaved job review edits? Save requirements and plans first to keep them.')) return;
+    if (planDirty && !window.confirm('Save the resume and discard unsaved job review edits? Accept wording you want to keep, and save requirement or plan edits first.')) return;
     setBusy(true); setError(''); setNotice('');
     try {
       const clean = { ...draft, skills: parseSkills(skills),
