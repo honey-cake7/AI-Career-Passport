@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ChangeEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useId, useRef, useState, type FormEvent, type ChangeEvent, type ReactNode } from 'react';
 import { isAxiosError } from 'axios';
 import { apiClient } from '../api/axios';
 import type { IProfile, EditSuggestion } from '../types';
@@ -25,7 +25,7 @@ function Field({ title, value, onChange, multiline = false, required = false, ma
 export function ResumeEditor({ profile, onSaved, onDeleted, onDirty, resourcePath, documentLabel = 'Base resume', reviewPanel }: {
   profile: IProfile; onSaved: (profile: IProfile) => void; onDeleted: () => void; onDirty: (dirty: boolean) => void;
   resourcePath?: string; documentLabel?: string;
-  reviewPanel?: (controls: { dirty: boolean; busy: boolean; apply: (suggestion: EditSuggestion) => boolean }) => ReactNode;
+  reviewPanel?: (controls: { dirty: boolean; busy: boolean; apply: (suggestion: EditSuggestion) => boolean; onPlanDirty: (value: boolean) => void; focusEvidence: () => void }) => ReactNode;
 }) {
   const path = resourcePath ?? `/api/profile/${profile.profileId}`;
   const [draft, setDraft] = useState(() => content(profile));
@@ -36,25 +36,30 @@ export function ResumeEditor({ profile, onSaved, onDeleted, onDirty, resourcePat
   const [notice, setNotice] = useState('');
   const [pdf, setPdf] = useState('');
   const [conflict, setConflict] = useState(false);
+  const [planDirty, setPlanDirty] = useState(false);
+  const [panelEpoch, setPanelEpoch] = useState(0);
   const mounted = useRef(true);
   const errorMessage = useRef<HTMLParagraphElement>(null);
   const editorForm = useRef<HTMLFormElement>(null);
   const dirty = JSON.stringify(draft) !== JSON.stringify(content(profile)) || skills !== profile.skills.join(', ');
-  useEffect(() => { onDirty(dirty); }, [dirty, onDirty]);
+  useEffect(() => { onDirty(dirty || planDirty); }, [dirty, planDirty, onDirty]);
   useEffect(() => {
-    const warn = (event: BeforeUnloadEvent) => { if (dirty) { event.preventDefault(); event.returnValue = ''; } };
+    const warn = (event: BeforeUnloadEvent) => { if (dirty || planDirty) { event.preventDefault(); event.returnValue = ''; } };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty]);
+  }, [dirty, planDirty]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => () => { if (pdf) URL.revokeObjectURL(pdf); }, [pdf]);
   useEffect(() => { if (error) errorMessage.current?.focus(); }, [error]);
 
-  function reset(next: IProfile) {
+  function reset(next: IProfile, refreshPanel = true) {
     setDraft(content(next)); setSkills(next.skills.join(', ')); setConflict(false); setPdf('');
+    if (refreshPanel) setPanelEpoch(x => x + 1);
   }
   async function save(event: FormEvent) {
-    event.preventDefault(); setBusy(true); setError(''); setNotice('');
+    event.preventDefault();
+    if (planDirty && !window.confirm('Save the resume and discard unsaved plan edits? Save your plan first to keep those notes.')) return;
+    setBusy(true); setError(''); setNotice('');
     try {
       const clean = { ...draft, skills: skills.split(',').map(x => x.trim()).filter(Boolean),
         projects: draft.projects.map(p => ({ ...p, techStack: p.techStack.map(x => x.trim()).filter(Boolean) })) };
@@ -81,7 +86,7 @@ export function ResumeEditor({ profile, onSaved, onDeleted, onDirty, resourcePat
     } finally { if (mounted.current) setBusy(false); }
   }
   async function reload() {
-    if (dirty && !window.confirm('Discard your unsaved edits and load the latest saved resume?')) return;
+    if ((dirty || planDirty) && !window.confirm('Discard your unsaved resume and plan edits and load the latest saved resume?')) return;
     setBusy(true); setError('');
     try {
       const response = await apiClient.get(resourcePath ?? '/api/profile/me');
@@ -127,7 +132,7 @@ export function ResumeEditor({ profile, onSaved, onDeleted, onDirty, resourcePat
     <div className="workspace-heading"><div><p className="eyebrow">YOUR WORKSPACE</p><h1>A resume that sounds like you.</h1><p>Edit the details. Keep the facts. Save a document you can stand behind.</p></div><span className="save-state" role="status">{dirty ? 'Unsaved changes' : 'All changes saved'}</span></div>
     <div className="editor-layout">
       <form onSubmit={save} className="editor-form" ref={editorForm}>
-        <div className="document-toolbar"><strong>{documentLabel}</strong><div className="actions"><button type="button" disabled={busy || !dirty} onClick={() => { if (window.confirm('Discard your unsaved changes?')) { reset(profile); setError(''); setNotice(''); } }}>Discard edits</button><button className="primary" disabled={busy || !dirty || conflict}>{busy ? 'Working…' : 'Save changes'}</button></div></div>
+        <div className="document-toolbar"><strong>{documentLabel}</strong><div className="actions"><button type="button" disabled={busy || !dirty} onClick={() => { if (window.confirm('Discard your unsaved resume changes? Plan edits will be kept.')) { reset(profile, false); setError(''); setNotice(''); } }}>Discard edits</button><button className="primary" disabled={busy || !dirty || conflict}>{busy ? 'Working…' : 'Save changes'}</button></div></div>
         {error && <p className="error" role="alert" tabIndex={-1} ref={errorMessage}>{error}</p>}
         {conflict && <button type="button" disabled={busy} onClick={() => void reload()}>Reload saved resume</button>}
         {notice && <p className="notice" role="status">{notice}</p>}
@@ -149,7 +154,7 @@ export function ResumeEditor({ profile, onSaved, onDeleted, onDirty, resourcePat
               <Field title="Project name" required value={item.title} onChange={v => update('projects', i, 'title', v)} /><Field title="Project URL" type="url" maxLength={1000} value={item.link} onChange={v => update('projects', i, 'link', v)} />
               <Field title="Technologies · one per line" multiline maxLength={5000} value={item.techStack.join('\n')} onChange={v => update('projects', i, 'techStack', v.split('\n'))} />
               <Field title="What you built and your contribution" sourceId={`project:${i}`} maxLength={10000} multiline value={item.description} onChange={v => update('projects', i, 'description', v)} /></article>)}
-            <button type="button" disabled={draft.projects.length >= 30} onClick={() => setDraft(d => ({ ...d, projects: [...d.projects, { title: '', techStack: [] }] }))}>+ Add project</button>
+            <button type="button" data-add-project disabled={draft.projects.length >= 30} onClick={() => setDraft(d => ({ ...d, projects: [...d.projects, { title: '', techStack: [] }] }))}>+ Add project</button>
           </section>
           <section className="editor-section"><p className="section-number">05 / EDUCATION</p><h2>Your education</h2>
             {draft.education.map((item, i) => <article className="entry" key={i}><div className="entry-heading"><h3>Education {i + 1}</h3><button type="button" onClick={() => removeItem('education', i)}>Remove education {i + 1}</button></div><div className="field-grid">
@@ -159,7 +164,10 @@ export function ResumeEditor({ profile, onSaved, onDeleted, onDirty, resourcePat
         </fieldset>
         <div className="document-toolbar"><p className="hint">* Required fields. Save before previewing or downloading.</p><button className="primary" disabled={busy || !dirty || conflict}>Save changes</button></div>
       </form>
-      <aside className="document-aside">{reviewPanel?.({ dirty, busy, apply })}<div className="preview-card"><p className="eyebrow">THE DOCUMENT</p><h2>Ready when you are.</h2><p>Your PDF is generated from the saved resume, using a clean A4 layout.</p><button className="primary" disabled={busy || dirty} onClick={() => void preview()}>{pdf && !dirty ? 'Refresh PDF preview' : 'Preview saved PDF'}</button>
+      <aside className="document-aside"><Fragment key={panelEpoch}>{reviewPanel?.({ dirty, busy, apply, onPlanDirty: setPlanDirty, focusEvidence: () => {
+        const target = editorForm.current?.querySelector<HTMLElement>('[data-source-id^="project:"], [data-add-project]');
+        target?.scrollIntoView({ block: 'center' }); target?.focus({ preventScroll: true });
+      } })}</Fragment><div className="preview-card"><p className="eyebrow">THE DOCUMENT</p><h2>Ready when you are.</h2><p>Your PDF is generated from the saved resume, using a clean A4 layout.</p><button className="primary" disabled={busy || dirty} onClick={() => void preview()}>{pdf && !dirty ? 'Refresh PDF preview' : 'Preview saved PDF'}</button>
         {dirty && <p className="hint">Save your changes to update the PDF.</p>}
         {pdf && !dirty && <><a className="download-link" href={pdf} download={resourcePath ? 'tailored-resume.pdf' : 'resume.pdf'}>Download this PDF ↓</a><iframe title="Saved resume PDF" src={pdf} /></>}
         <p className="hint">The preview and download use the same PDF. Importing a PDF does not preserve its original design.</p></div>

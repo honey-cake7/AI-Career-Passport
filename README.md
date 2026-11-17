@@ -17,12 +17,14 @@ An existing React/TypeScript, Express, MongoDB and Qdrant prototype being improv
 | PDF export | Saved-revision PDF preview and download use the same file. One PDFKit A4 layout with bundled Noto Sans fonts; original import layout is not preserved. Full multilingual coverage and advanced pagination remain open. |
 | Public sharing | Disabled: legacy links exposed contact data without explicit consent. |
 | Job-specific resumes | Up to 20 owner-only editable copies of the saved base, each with its own JD, revision and cached review. Accept/edit/reject line-order suggestions; save and export separately. Base changes do not synchronize into copies. This is not immutable edit history. |
-| Gap actions | Conditional next steps for adding real evidence or completing a small tested project task. No assumption that a missing mention means a missing skill; personalized curricula and progress tracking remain planned. |
+| Gap plans | Up to 20 private plans per job version. Confirm existing experience, need for practice, or need for manual checking; adapt a focused task and completion criteria; save status, outcome notes and an optional URL. Completion is self-reported. Reassess the original requirement against saved resume text without another AI call. Personalized curricula and verified proficiency are not provided. |
 | Application tracking | Planned; not implemented. |
 
 See the [technical audit](docs/architecture/AUDIT.md), [phased roadmap](docs/architecture/ROADMAP.md), [architecture decisions](docs/architecture/DECISIONS.md), [first milestone](docs/architecture/MILESTONE-1.md) and [editor milestone](docs/architecture/MILESTONE-2.md). Roadmap items are not claims of implemented features.
 
 The [job-review milestone report](docs/architecture/MILESTONE-3.md) explains the current workflow, test evidence and limitations. After saving a base resume, choose **Tailor for a job → enter a version name and job description → Create job version → Review this job**. Inspect quotes/evidence and next steps, accept/edit/reject suggestions, save, then preview/download the tailored PDF. Suggestions bring relevant existing lines first and preserve every line; they do not freely generate new achievements. You may rewrite wording yourself before saving. Deleting the base also deletes all its job versions; deleting one version keeps the base.
+
+For [saved gap plans](docs/architecture/MILESTONE-4.md), expand **Choose a next step** beneath a requirement, select what is true for you, and choose **Save a focused plan**. Adapt the task and criteria in **Your next steps**. Record what you actually did before marking completion. Choose **Edit resume evidence**, make factual edits, save the resume, then **Reassess saved resume**. Completing a task never changes the resume or proves proficiency. Saved plans remain available after resume edits invalidate the AI review. Plans and notes are not sent to a model or included in the exported PDF.
 
 ## Run locally
 
@@ -105,6 +107,9 @@ Authenticate using `Authorization: Bearer <token>` returned by registration/logi
 | GET / POST | `/api/profile/:profileId/versions` | List metadata, or create `{label, jobDescription, revision}` from the saved base; atomic 20-version limit. |
 | GET / PUT / DELETE | `/api/profile/:profileId/versions/:versionId` | Load, save `{revision, content}`, or delete one owned job version. Saving invalidates its review. |
 | POST | `/api/profile/:profileId/versions/:versionId/review` | `{revision}`; verified requirements, literal evidence, next steps and safe line-order suggestions. Cached for the saved revision; failures do not change resume content. |
+| GET / POST | `/api/profile/:profileId/versions/:versionId/plans` | Load plans, or create `{revision, plansRevision, requirementId, confirmation}` from a current saved review. Confirmation: `has_experience`, `needs_practice`, or `needs_review`; context requirements allow only `needs_review`. |
+| PUT / DELETE | `/api/profile/:profileId/versions/:versionId/plans/:planId` | Update `{revision, plansRevision, plan}` or delete `{revision, plansRevision}`. Editable plan fields: `task`, `criteria`, `checks`, `status`, `notes`, `link`. Status: `planned`, `in_progress`, `completed`. Unknown fields fail. |
+| POST | `/api/profile/:profileId/versions/:versionId/plans/:planId/reassess` | `{revision, plansRevision}`; compare the frozen requirement with saved resume text locally. Does not change task status or resume content. |
 | GET | `/api/profile/:profileId/versions/:versionId/export?revision=0` | Saved job-version PDF; revision is mandatory and stale requests return 409. |
 | GET | `/api/profile/:profileId/export?revision=0` | Owner-only saved-profile PDF; supplied stale revision returns 409. |
 | DELETE | `/api/profile/:profileId` | Delete owner's saved profile, including private fields. |
@@ -113,7 +118,7 @@ Authenticate using `Authorization: Bearer <token>` returned by registration/logi
 
 Unauthorized private requests return 401; missing/foreign profiles return the same 404. Responses are no-store. CORS permits only the configured frontend origin (localhost in development by default). Rate limits are per API process and conservative IP/account limits; multi-instance quotas and trusted-proxy configuration remain release work.
 
-The legacy `/optimize` API remains for compatibility with its unchecked model-score contract. The new UI never calls it; it is not an alternative evidence-based scoring endpoint. Job reviews make one bounded provider call (25-second timeout, no automatic retries), log only durations/counts/token usage and admit one active review per account per API process. A version has a 500 KiB JSON content/JD/review budget as well as the 20-version cap. Cost in currency is not estimated without verified pricing. Job description/model errors and provider rate limits are recoverable UI states.
+The legacy `/optimize` API remains for compatibility with its unchecked model-score contract. The new UI never calls it; it is not an alternative evidence-based scoring endpoint. Job reviews make one bounded provider call (25-second timeout, no automatic retries), log only durations/counts/token usage and admit one active review per account per API process. A version has a combined 500 KiB JSON content/JD/review/plan budget as well as the 20-version cap. Plan mutations return `{gapPlans, plansRevision, revision}`; they increment a separate plan counter, preserving resume revision and cached review. Stale resume or plan counters return 409. Plans use no additional provider calls or infrastructure. Cost in currency is not estimated without verified pricing. Job description/model errors and provider rate limits are recoverable UI states.
 
 ## Privacy and release boundaries
 

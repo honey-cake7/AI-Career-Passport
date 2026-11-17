@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import type { IProfile, JobVersion, JobReview } from '../src/types';
+import type { GapPlan, IProfile, JobVersion, JobReview } from '../src/types';
 
 const id = '507f1f77bcf86cd799439011';
 const versionId = '507f1f77bcf86cd799439012';
@@ -21,6 +21,7 @@ async function setup(page: Page) {
   let version: JobVersion | null = null;
   let failReview = false;
   let reviewCalls = 0;
+  let conflictPlan = false;
   await page.route('**/api/**', async route => {
     const req = route.request(); const url = new URL(req.url()); const path = url.pathname;
     if (!path.startsWith('/api/')) return route.continue();
@@ -32,13 +33,37 @@ async function setup(page: Page) {
     if (path === root) {
       if (req.method() === 'GET') return response(version ? [version] : []);
       const body = req.postDataJSON(); expect(body.revision).toBe(0);
-      version = { ...structuredClone(base), profileId: versionId, label: body.label, jobDescription: body.jobDescription, baseRevision: 0, createdAt: '2026-11-17T10:00:00Z', analysis: null };
+      version = { ...structuredClone(base), profileId: versionId, label: body.label, jobDescription: body.jobDescription, baseRevision: 0, createdAt: '2026-11-17T10:00:00Z', analysis: null, gapPlans: [], plansRevision: 0 };
       return response(version, 201);
     }
     if (path === `${root}/${versionId}/review`) {
       reviewCalls++;
       if (failReview) return route.fulfill({ status: 503, json: { success: false, code: 'unavailable', error: 'Job review is temporarily unavailable. Your saved version is unchanged.' } });
       version!.analysis = analysis(version!); return response(version!.analysis);
+    }
+    if (path.startsWith(`${root}/${versionId}/plans`)) {
+      const state = () => ({ gapPlans: version!.gapPlans, plansRevision: version!.plansRevision, revision: version!.revision });
+      if (req.method() === 'GET') return response(state());
+      const body = req.postDataJSON();
+      if (conflictPlan) { conflictPlan = false; return route.fulfill({ status: 409, json: { error: 'The resume or its plans changed. Reload before saving; your current notes have not been saved.' } }); }
+      expect(body.revision).toBe(version!.revision); expect(body.plansRevision).toBe(version!.plansRevision);
+      if (path.endsWith('/plans')) {
+        const r = version!.analysis!.requirements.find(r => r.id === body.requirementId)!;
+        const plan: GapPlan = { id: `507f1f77bcf86cd7994390${20 + version!.gapPlans!.length}`, requirementKey: r.term, requirement: r, confirmation: body.confirmation,
+          task: `Package one existing project feature with ${r.term}`, criteria: ['Build and start the demo.', 'Keep secrets outside the image.', 'Check the running feature.'], checks: [false, false, false], status: 'planned', notes: '', link: '', createdAt: '2026-11-17T10:00:00Z', updatedAt: '2026-11-17T10:00:00Z',
+          assessment: { revision: version!.revision, checkedAt: '2026-11-17T10:00:00Z', status: r.status, evidence: r.evidence } };
+        version!.gapPlans!.push(plan);
+      } else {
+        const planId = path.split('/plans/')[1]!.split('/')[0]!;
+        const index = version!.gapPlans!.findIndex(p => p.id === planId); const plan = version!.gapPlans![index]!;
+        if (req.method() === 'DELETE') version!.gapPlans!.splice(index, 1);
+        else if (path.endsWith('/reassess')) plan.assessment = { ...plan.assessment, revision: version!.revision, status: version!.projects[0]?.description?.includes('Docker') ? 'work_mention' : 'claim_only' };
+        else {
+          if (body.plan.status === 'completed' && (!body.plan.notes.trim() || body.plan.checks.some((value: boolean) => !value))) return route.fulfill({ status: 400, json: { error: 'To record completion, check every criterion and describe what you actually did.' } });
+          version!.gapPlans![index] = { ...plan, ...body.plan };
+        }
+      }
+      version!.plansRevision!++; return response(state());
     }
     if (path.endsWith('/export')) {
       expect(url.searchParams.get('revision')).toBe(String(version!.revision));
@@ -56,7 +81,7 @@ async function setup(page: Page) {
   await page.getByLabel('Password', { exact: true }).fill('synthetic password');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.getByRole('button', { name: 'Tailor for a job' }).click();
-  return { base, version: () => version, fail: (value: boolean) => { failReview = value; }, calls: () => reviewCalls };
+  return { base, version: () => version, fail: (value: boolean) => { failReview = value; }, calls: () => reviewCalls, conflict: () => { conflictPlan = true; } };
 }
 async function create(page: Page) {
   await page.getByLabel('Version name').fill('Frontend developer · Example');
@@ -115,4 +140,92 @@ test('failed review can retry and a changed draft cannot be overwritten by an ol
   await expect(page.getByRole('alert')).toContainText('This section has changed');
   await expect(page.getByLabel('What you built and your contribution')).toHaveValue('My newer unsaved wording.');
   expect(api.version()?.projects[0]!.description).toBe(original);
+});
+
+async function dockerPlan(page: Page) {
+  const api = await setup(page); await create(page);
+  await page.getByRole('button', { name: 'Review this job', exact: true }).click();
+  const requirement = page.locator('.requirement-card').filter({ has: page.getByRole('heading', { name: 'Docker', exact: true }) });
+  await requirement.getByText('Choose a next step', { exact: true }).click();
+  await requirement.getByLabel('What is true for you?').selectOption('needs_practice');
+  await requirement.getByRole('button', { name: 'Save a focused plan' }).click();
+  const plan = page.getByRole('article', { name: 'Plan for Docker' });
+  await expect(plan.getByLabel('Focused task')).toBeVisible();
+  return { api, plan };
+}
+
+test('saved plans require an outcome, survive reopening, and reassess only saved resume evidence', async ({ page }, info) => {
+  const { api, plan } = await dockerPlan(page);
+  await plan.getByLabel('Focused task').fill('Package my existing parser demo with Docker');
+  await plan.getByLabel('Task status').selectOption('completed');
+  await plan.getByRole('button', { name: 'Save plan', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('check every criterion');
+  expect(api.version()!.gapPlans![0]!.status).toBe('planned');
+  for (let i = 1; i <= 3; i++) await plan.getByLabel(`Criterion ${i} done`, { exact: true }).check();
+  await plan.getByLabel('Outcome notes').fill('Built the image, started the demo, and checked its parser endpoint with test data.');
+  await plan.getByLabel('Evidence URL').fill('https://example.invalid/parser-demo');
+  await plan.getByRole('button', { name: 'Save plan', exact: true }).click();
+  await expect(plan.getByRole('button', { name: 'Save plan', exact: true })).toBeDisabled();
+  await expect(plan.getByText('Listed without an example', { exact: true })).toBeVisible();
+  expect(api.version()!.projects[0]!.description).toBe(original); expect(api.calls()).toBe(1);
+  await page.getByRole('button', { name: 'All job versions' }).click();
+  await page.getByRole('button', { name: 'Open Frontend developer · Example' }).click();
+  await expect(plan.getByLabel('Outcome notes')).toHaveValue(/Built the image/);
+  await plan.getByRole('button', { name: 'Edit resume evidence' }).click();
+  await expect(page.getByLabel('What you built and your contribution')).toBeFocused();
+  await page.getByLabel('What you built and your contribution').fill(original + '\nPackaged the parser demo with Docker and checked its startup.');
+  await expect(plan.getByRole('button', { name: 'Reassess saved resume' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).first().click();
+  await expect(plan.getByText(/Out of date/)).toBeVisible();
+  await plan.getByRole('button', { name: 'Reassess saved resume' }).click();
+  await expect(plan.getByText('Mentioned in work', { exact: true })).toBeVisible();
+  await expect(plan.getByLabel('Task status')).toHaveValue('completed');
+  await expect(plan.getByText(/Task completion does not add evidence/)).toBeVisible();
+  expect(api.calls()).toBe(1); expect(api.base.projects[0]!.description).toBe(original);
+  await plan.screenshot({ path: `test-results/gap-plan-${info.project.name}.png` });
+  const width = await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth }));
+  expect(width.document).toBeLessThanOrEqual(width.viewport);
+});
+
+test('stale plan errors preserve notes and navigation warns about unsaved plan edits', async ({ page }) => {
+  const { api, plan } = await dockerPlan(page);
+  await plan.getByLabel('Outcome notes').fill('Keep these unsaved notes.');
+  api.conflict(); await plan.getByRole('button', { name: 'Save plan', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Reload before saving');
+  await expect(plan.getByLabel('Outcome notes')).toHaveValue('Keep these unsaved notes.');
+  page.once('dialog', dialog => dialog.dismiss()); await page.getByRole('button', { name: 'All job versions' }).click();
+  await expect(plan.getByLabel('Outcome notes')).toHaveValue('Keep these unsaved notes.');
+  page.once('dialog', dialog => dialog.dismiss()); await page.getByRole('button', { name: 'Reload saved plans' }).click();
+  await expect(plan.getByLabel('Outcome notes')).toHaveValue('Keep these unsaved notes.');
+  page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Reload saved plans' }).click();
+  await expect(plan.getByLabel('Outcome notes')).toHaveValue('');
+  await plan.getByLabel('Task status').selectOption('in_progress');
+  await page.getByLabel('Summary').fill('An unsaved resume change.');
+  await plan.getByRole('button', { name: 'Save plan', exact: true }).click();
+  await expect(plan.getByRole('button', { name: 'Save plan', exact: true })).toBeDisabled();
+  await expect(page.getByLabel('Summary')).toHaveValue('An unsaved resume change.');
+  await expect(page.getByRole('button', { name: 'Preview saved PDF', exact: true })).toBeDisabled();
+  page.once('dialog', dialog => dialog.accept()); await plan.getByRole('button', { name: 'Delete plan', exact: true }).click();
+  await expect(plan).toHaveCount(0); expect(api.version()!.gapPlans).toHaveLength(0);
+});
+
+test('discarding resume edits preserves plans and saving warns before discarding plan drafts', async ({ page }) => {
+  const { api, plan } = await dockerPlan(page);
+  await plan.getByLabel('Outcome notes').fill('My saved task outcome.');
+  await plan.getByRole('button', { name: 'Save plan', exact: true }).click();
+  await expect(plan.getByRole('button', { name: 'Save plan', exact: true })).toBeDisabled();
+  await plan.getByLabel('Outcome notes').fill('An unsaved plan draft.');
+  await page.getByLabel('Summary').fill('A temporary resume draft.');
+  page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Discard edits', exact: true }).click();
+  await expect(page.getByLabel('Summary')).toHaveValue('');
+  await expect(plan.getByLabel('Outcome notes')).toHaveValue('An unsaved plan draft.');
+  await page.getByLabel('Summary').fill('A truthful saved summary.');
+  page.once('dialog', dialog => dialog.dismiss()); await page.getByRole('button', { name: 'Save changes', exact: true }).first().click();
+  await expect(plan.getByLabel('Outcome notes')).toHaveValue('An unsaved plan draft.');
+  expect(api.version()!.revision).toBe(0);
+  page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Save changes', exact: true }).first().click();
+  await expect(page.getByText('All changes saved', { exact: true })).toBeVisible();
+  await expect(plan.getByLabel('Outcome notes')).toHaveValue('My saved task outcome.');
+  await expect(page.getByLabel('Summary')).toHaveValue('A truthful saved summary.');
+  expect(api.version()!.gapPlans![0]!.notes).toBe('My saved task outcome.');
 });

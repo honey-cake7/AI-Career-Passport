@@ -58,5 +58,15 @@ export interface JobReview {
 }
 export interface JobVersion extends IProfile {
   label: string; jobDescription: string; baseRevision: number; createdAt: string; analysis: JobReview | null;
+  gapPlans?: GapPlan[]; plansRevision?: number;
+}
+export type PlanConfirmation = 'has_experience' | 'needs_practice' | 'needs_review';
+export interface GapPlan {
+  id: string; requirementKey: string;
+  requirement: Pick<JobReview['requirements'][number], 'id' | 'label' | 'quote' | 'kind' | 'term' | 'priority'>;
+  confirmation: PlanConfirmation; task: string; criteria: string[]; checks: boolean[];
+  status: 'planned' | 'in_progress' | 'completed'; notes: string; link: string;
+  createdAt: string; updatedAt: string;
+  assessment: { revision: number; checkedAt: string; status: JobReview['requirements'][number]['status']; evidence: JobReview['requirements'][number]['evidence'] };
 }
 export type VersionListItem = Pick<JobVersion, 'profileId' | 'label' | 'revision' | 'baseRevision' | 'createdAt'>;

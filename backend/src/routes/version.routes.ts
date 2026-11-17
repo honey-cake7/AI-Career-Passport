@@ -5,12 +5,8 @@ import { inputObject, inputText, parseResumeContent, parseResumeSave, ResumeInpu
 import { rateLimit } from '../security/rateLimit.js';
 import type { JobReview } from '../services/jobReview.js';
 import { JobReviewError } from '../services/jobReviewError.js';
-
-function fitsVersionBudget(content: unknown, jobDescription: string, analysis?: JobReview) {
-  // 20 versions × 500 KiB JSON leaves room for BSON overhead, the base profile
-  // and multibyte text below MongoDB's 16 MiB document limit.
-  return Buffer.byteLength(JSON.stringify({ content, jobDescription, analysis }), 'utf8') <= 500 * 1024;
-}
+import { fitsVersionBudget, plansCounter, parseRevision as revision, versionOwner as owner, versionProjection as projection } from './versionSupport.js';
+import { createGapPlanRouter } from './gapPlan.routes.js';
 
 const defaults = {
   review: async (...args: Parameters<typeof import('../services/jobReviewProvider.js').reviewJob>) => {
@@ -21,11 +17,7 @@ const defaults = {
 export function versionData(version: IResumeVersion) {
   return { profileId: version._id, revision: version.revision, ...version.content,
     label: version.label, jobDescription: version.jobDescription, baseRevision: version.baseRevision,
-    createdAt: version.createdAt, analysis: version.analysis ?? null };
-}
-function revision(value: unknown) {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) throw new ResumeInputError('Revision must be a non-negative integer');
-  return value as number;
+    createdAt: version.createdAt, analysis: version.analysis ?? null, gapPlans: version.gapPlans ?? [], plansRevision: version.plansRevision ?? 0 };
 }
 function baseContent(profile: IProfile) {
   const plain = profile.toObject();
@@ -38,8 +30,6 @@ export function createVersionRouter(deps = defaults) {
   const aiLimit = rateLimit(10, 15 * 60 * 1000);
   // Per-process admission prevents multiple paid reviews for one account at once.
   const reviewing = new Set<string>();
-  const owner = (res: { locals: Record<string, any> }) => ({ _id: res.locals.profile._id, userId: res.locals.userId });
-  const projection = (id: Types.ObjectId) => ({ versions: { $elemMatch: { _id: id } } });
 
   router.get('/', async (_req, res) => {
     const profile = await Profile.findOne(owner(res), { versions: 1 });
@@ -72,11 +62,12 @@ export function createVersionRouter(deps = defaults) {
     next();
   });
   router.get('/:versionId', (_req, res) => { res.json({ success: true, data: versionData(res.locals.version) }); });
+  router.use('/:versionId/plans', createGapPlanRouter());
   router.put('/:versionId', async (req, res) => {
     const input = parseResumeSave(req.body);
     const v: IResumeVersion = res.locals.version;
-    if (!fitsVersionBudget(input.content, v.jobDescription)) throw new ResumeInputError('This job version is too large. Shorten the resume content.');
-    const profile = await Profile.findOneAndUpdate({ ...owner(res), versions: { $elemMatch: { _id: v._id, revision: input.revision } } },
+    if (!fitsVersionBudget(input.content, v.jobDescription, undefined, v.gapPlans)) throw new ResumeInputError('This job version is too large. Shorten the resume content or plan notes.');
+    const profile = await Profile.findOneAndUpdate({ ...owner(res), versions: { $elemMatch: { _id: v._id, revision: input.revision, ...plansCounter(v.plansRevision) } } },
       { $set: { 'versions.$.content': input.content }, $inc: { 'versions.$.revision': 1 }, $unset: { 'versions.$.analysis': 1 } },
       { returnDocument: 'after', runValidators: true, projection: projection(v._id) });
     if (!profile?.versions?.[0]) { res.status(409).json({ success: false, error: 'This job version changed. Your edits are still here; reload the saved version.' }); return; }
@@ -93,10 +84,10 @@ export function createVersionRouter(deps = defaults) {
     reviewing.add(userId);
     try {
       const result: JobReview = await deps.review(v.content, v.jobDescription, expected);
-      if (!fitsVersionBudget(v.content, v.jobDescription, result)) throw new JobReviewError('invalid_output');
-      const saved = await Profile.updateOne({ ...owner(res), versions: { $elemMatch: { _id: v._id, revision: expected } } },
+      if (!fitsVersionBudget(v.content, v.jobDescription, result, v.gapPlans)) throw new JobReviewError('invalid_output');
+      const saved = await Profile.updateOne({ ...owner(res), versions: { $elemMatch: { _id: v._id, revision: expected, ...plansCounter(v.plansRevision) } } },
         { $set: { 'versions.$.analysis': result } });
-      if (!saved.matchedCount) { res.status(409).json({ success: false, error: 'The resume changed during analysis. Discarded the stale review; reload and try again.' }); return; }
+      if (!saved.matchedCount) { res.status(409).json({ success: false, error: 'The resume or plans changed during analysis. Discarded the stale review; reload and try again.' }); return; }
       res.json({ success: true, data: result });
     } finally { reviewing.delete(userId); }
   });

@@ -2,6 +2,20 @@
 
 Updated: 2026-11-17. Baseline context and evidence: [AUDIT.md](AUDIT.md). ADR-008 supersedes the preview-only behavior and upload replacement described in earlier M1 decisions; JSON body size is now 256 KiB for bounded full-document saves.
 
+## ADR-010 — Private gap plans separate task progress from resume evidence
+
+**Status:** accepted for M4 following the owner's instruction to implement saved next steps.
+
+Store up to 20 bounded plans inside each existing owner-scoped job version. Create only from its current validated review; the client supplies a requirement ID and confirmation, never a replacement requirement or owner. Preserve the original quote, term, kind and priority. Hash kind, normalized term and normalized quote to reject duplicate plans even if a later model response changes its ordering or label. Context/eligibility/duration requirements allow a manual-check plan only. Existing experience and practice needs are user confirmations, not automatic inferences from missing text.
+
+Use deterministic starting tasks with editable 1–5 criteria rather than another provider call. Persist private notes, optional credential-free HTTP(S) URL, checks and status. Completion requires all checks and nonblank outcome notes but remains explicitly self-reported. No URL is fetched or verified. No plan data enters the provider request, resume content, PDF or base profile DTO. User edits the resume separately and saves before local reassessment. Reuse the existing conservative exact/alias matcher against the frozen requirement, recording the checked resume revision and evidence excerpts. A fresh work mention establishes text coverage only; it does not prove competence. Reassessment never changes task status.
+
+Plan mutations compare both the saved resume revision and a separate `plansRevision`, then atomically replace the bounded array and increment only the plan counter. This prevents concurrent plan changes from overwriting notes without unnecessarily invalidating resume review/export. Resume/review writes also guard the plan counter; plan writes guard the analysis snapshot. These checks keep the combined 500 KiB content/JD/review/plan budget valid across concurrent operations. Legacy missing plan fields start at empty/zero. Embedded deletion remains atomic with the version or base profile; no new service, transaction requirement, dependency or collection is needed.
+
+The UI keeps plan drafts independent of resume drafts. Navigation/unload warns about either; a plan save preserves unsaved resume edits. Discarding resume edits keeps plan drafts. Saving/reloading a resume remounts the review panel with current persisted metadata and warns before discarding unsaved plan edits. A stale plan error retains local notes; explicit reload confirms their discard. Unsaved drafts still live only in memory and cannot survive forced refresh or session expiry.
+
+**Consequences:** the current hosting topology is sufficient and plans add no inference cost. Starter tasks are deliberately narrow templates, not adaptive curricula. Sources/URLs/outcomes are not independently verified; no readiness percentage, automatic skill endorsement or hiring prediction is added. Real-user validation and release hardening remain open.
+
 ## ADR-009 — Grounded job review and bounded embedded resume copies
 
 **Status:** accepted for M3, following owner authorization of the job-tailoring workflow.
@@ -14,7 +28,7 @@ Generate safe ordering suggestions locally by moving complete existing relevant 
 
 One review uses one provider request with a 25-second timeout and no automatic retries, one active review per account/process, rate limiting and a revision cache. Token usage is retained/logged alongside bounded event categories, never JD/resume/provider payloads. Currency cost stays unknown. A completed review is written only if the same owned version/revision still exists; concurrent edits/deletion discard it with 409. Distinguish provider authentication/model/rate/timeout/output failures using safe codes and operator logs. Recovery does not overwrite resume data. The Groq SDK timeout class is checked using `instanceof` because its `name` is simply `Error` in the installed SDK.
 
-**Consequences:** no new infrastructure or production dependency; editing and export still work when AI is unavailable. The same Vercel/Render/Mongo deployment topology can serve this workflow after release approval. Future high-volume versions should use a separately justified storage/retention design; arbitrary version counts are not supported. M4 still needs user-confirmed gap plans and real-user validation, and production release gates remain unchanged.
+**Consequences:** no new infrastructure or production dependency; editing and export still work when AI is unavailable. The same Vercel/Render/Mongo deployment topology can serve this workflow after release approval. Future high-volume versions should use a separately justified storage/retention design; arbitrary version counts are not supported. ADR-010 adds user-confirmed gap plans; real-user validation and production release gates remain open.
 
 ## ADR-008 — A saved base resume before job-specific intelligence
 

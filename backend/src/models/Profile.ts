@@ -2,6 +2,7 @@ import mongoose, { Schema, Document, Model, Types } from 'mongoose';
 import { nanoid } from 'nanoid';
 import type { ResumeContent } from '../validation/resume.js';
 import type { JobReview } from '../services/jobReview.js';
+import type { GapPlan } from '../services/gapPlans.js';
 
 export interface IResumeVersion {
   _id: Types.ObjectId;
@@ -11,6 +12,8 @@ export interface IResumeVersion {
   revision: number;
   content: ResumeContent;
   analysis?: JobReview;
+  gapPlans?: GapPlan[];
+  plansRevision?: number;
   createdAt: Date;
 }
 
@@ -134,6 +137,8 @@ const ResumeVersionSchema = new Schema<IResumeVersion>({
   revision: { type: Number, default: 0 },
   content: { type: ResumeContentSchema, required: true },
   analysis: { type: Schema.Types.Mixed }, // Only server-validated JobReview values.
+  gapPlans: { type: [Schema.Types.Mixed], default: [] }, // Only validated, owner-scoped plan mutations.
+  plansRevision: { type: Number, default: 0, min: 0 },
   createdAt: { type: Date, default: Date.now },
 });
 
