@@ -49,6 +49,8 @@ Local verification uses synthetic data and disposable MongoDB. Provider/native s
 
 Verified locally: **93 backend unit/HTTP tests, 52 MongoDB/PDF integration tests and 34 browser tests passed (179 total)**. Backend build/test typecheck and frontend build/test typecheck/lint passed. Desktop/mobile coverage screenshots were inspected. The secret-pattern scan passed for 131 tracked/intended files; changed-line whitespace was checked before committing. GitHub Actions repeats these checks after the development push.
 
+CI follow-up, 2026-11-18: run `44141191285` passed source/backend checks and 33 browser cases, but the mobile skill-review sign-out/sign-in case failed on both attempts. Its trace showed the login email was empty: the test filled the resume editor's identically labeled Email field while logout was still in flight. The helper now waits for the Welcome back heading, verifies the signed-in editor has loaded, and explicitly opens the skill review after re-login. Persistence assertions remain intact; no timeout increase or retry relaxation is used. Follow-up local checks passed: all 34 browser cases, frontend test typecheck/lint, secret-pattern scan and whitespace checks.
+
 ## Owner notes and limits
 
 Explain three boundaries in interviews: AI extracts a proposed requirement set; runtime validation links fields to source quotes; deterministic comparison counts saved text, with user correction where interpretation is wrong. Coverage remains sensitive to extraction omissions, alias coverage and wording. Keeping the requirements fixed across edits makes progress comparisons more reproducible and avoids repeated provider cost. Original provenance and explicit exclusion make denominator changes inspectable.

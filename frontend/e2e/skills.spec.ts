@@ -65,9 +65,13 @@ async function setup(page: Page, manual = false) {
     throw Error(`Unexpected request ${req.method()} ${path}`);
   });
   async function signIn() {
+    // Logout finishes asynchronously; the resume editor also has an Email field.
+    // Wait for the actual auth screen before filling credentials.
+    await expect(page.getByRole('heading', { name: 'Welcome back', exact: true })).toBeVisible();
     await page.getByLabel('Email', { exact: true }).fill('synthetic@example.invalid');
     await page.getByLabel('Password', { exact: true }).fill('synthetic password');
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'A resume that sounds like you.', exact: true })).toBeVisible();
   }
   await page.goto('/'); await signIn();
   if (!manual) await page.locator('.skill-review-list > summary').click();
@@ -103,6 +107,7 @@ test('reviewed skill names preserve originals and manual additions through save,
   const preview = page.getByTitle('Saved resume PDF'); await expect(preview).toBeVisible();
   await expect(page.getByRole('link', { name: 'Download this PDF' })).toHaveAttribute('href', (await preview.getAttribute('src'))!);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click(); await api.signIn();
+  await page.locator('.skill-review-list > summary').click();
   await expect(rows.nth(1)).toContainText('Your choice: React.js');
   await expect(rows.nth(2)).toContainText('Your choice: My specialized tool');
   expect(api.calls()).toBe(0); expect(api.saves()).toBe(1);
