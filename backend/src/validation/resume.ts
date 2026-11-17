@@ -9,6 +9,7 @@ export interface ResumeContent {
 }
 
 export class ResumeInputError extends Error {}
+export { object as inputObject, string as inputText };
 
 function object(value: unknown, allowed: string[], path: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ResumeInputError(`${path} must be an object`);

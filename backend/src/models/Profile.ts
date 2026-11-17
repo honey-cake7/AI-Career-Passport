@@ -1,5 +1,18 @@
 import mongoose, { Schema, Document, Model, Types } from 'mongoose';
 import { nanoid } from 'nanoid';
+import type { ResumeContent } from '../validation/resume.js';
+import type { JobReview } from '../services/jobReview.js';
+
+export interface IResumeVersion {
+  _id: Types.ObjectId;
+  label: string;
+  jobDescription: string;
+  baseRevision: number;
+  revision: number;
+  content: ResumeContent;
+  analysis?: JobReview;
+  createdAt: Date;
+}
 
 // ─── Sub-document Interfaces ─────────────────────────────────
 
@@ -42,6 +55,7 @@ export interface IProject {
 export interface IProfile extends Document {
   userId: Types.ObjectId;
   revision: number;
+  versions?: IResumeVersion[];
   personalInfo: IPersonalInfo;
   experiences: IExperience[];
   education: IEducation[];
@@ -103,9 +117,30 @@ const ProjectSchema = new Schema<IProject>(
 
 // ─── Profile Schema ─────────────────────────────────────────
 
+const ResumeContentSchema = new Schema<ResumeContent>({
+  personalInfo: { type: PersonalInfoSchema, required: true },
+  experiences: { type: [ExperienceSchema], default: [] },
+  education: { type: [EducationSchema], default: [] },
+  projects: { type: [ProjectSchema], default: [] },
+  skills: { type: [String], default: [] },
+}, { _id: false });
+
+// Embedded versions make profile deletion and version updates atomic on standalone
+// MongoDB too. HTTP validation and a 20-version cap bound document size below 16 MB.
+const ResumeVersionSchema = new Schema<IResumeVersion>({
+  label: { type: String, required: true },
+  jobDescription: { type: String, required: true },
+  baseRevision: { type: Number, required: true },
+  revision: { type: Number, default: 0 },
+  content: { type: ResumeContentSchema, required: true },
+  analysis: { type: Schema.Types.Mixed }, // Only server-validated JobReview values.
+  createdAt: { type: Date, default: Date.now },
+});
+
 const ProfileSchema = new Schema<IProfile>(
   {
     revision: { type: Number, default: 0, min: 0 },
+    versions: { type: [ResumeVersionSchema], default: [], select: false },
     userId: {
       type: Schema.Types.ObjectId,
       ref: 'User',

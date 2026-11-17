@@ -41,3 +41,22 @@ export interface IProfile {
   projects: IProject[];
   skills: string[];
 }
+
+export interface EditSuggestion {
+  id: string; sourceId: string; sourceLabel: string; original: string; proposed: string; reason: string;
+}
+export interface JobReview {
+  schemaVersion: 1; revision: number; generatedAt: string;
+  requirements: {
+    id: string; label: string; quote: string; kind: 'skill' | 'context'; term: string;
+    priority: 'required' | 'preferred' | 'unspecified';
+    status: 'work_mention' | 'claim_only' | 'not_found' | 'unassessed';
+    evidence: { id: string; label: string; text: string }[]; action: string;
+  }[];
+  suggestions: EditSuggestion[];
+  usage: { model: string; inputTokens: number | null; outputTokens: number | null };
+}
+export interface JobVersion extends IProfile {
+  label: string; jobDescription: string; baseRevision: number; createdAt: string; analysis: JobReview | null;
+}
+export type VersionListItem = Pick<JobVersion, 'profileId' | 'label' | 'revision' | 'baseRevision' | 'createdAt'>;

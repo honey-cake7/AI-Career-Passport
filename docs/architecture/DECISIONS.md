@@ -2,6 +2,20 @@
 
 Updated: 2026-11-17. Baseline context and evidence: [AUDIT.md](AUDIT.md). ADR-008 supersedes the preview-only behavior and upload replacement described in earlier M1 decisions; JSON body size is now 256 KiB for bounded full-document saves.
 
+## ADR-009 — Grounded job review and bounded embedded resume copies
+
+**Status:** accepted for M3, following owner authorization of the job-tailoring workflow.
+
+Embed up to 20 job versions inside the owner's existing profile, hidden from default profile queries. Each has a server-generated ID, fixed job description, base revision, editable content, its own revision, and a cached review. This avoids a new collection, replica-set/transaction requirement, and orphaned private copies after base deletion on local standalone MongoDB. Creation atomically checks the base revision and array length. Version writes use an owner predicate plus `$elemMatch` containing both version ID and revision; independent array predicates could accidentally match different elements. Only the selected version is projected for load/write operations. Resume content/JD/review together are bounded to 500 KiB JSON per version with headroom for BSON overhead and the base document. This is editable job-specific copies, not immutable history.
+
+The backend sends only the JD to Groq, requesting at most 20 structured requirements. Runtime validation rejects unknown keys, invalid types, invalid categories, missing/truncated output, excessive counts and non-verbatim quotes/skill terms. These checks establish source linkage, not semantic correctness or complete extraction. Context, alternatives, negations and duration-qualified quotes are conservatively unassessed. Candidate text remains on the backend: exact terms and a small explicit alias list locate work-description mentions versus summary/skill/technology-list claims. Resume mentions remain self-reported evidence. No semantic score or hiring probability is generated; equivalence/negation heuristics have known limits.
+
+Generate safe ordering suggestions locally by moving complete existing relevant lines first, retaining all lines. A proposal includes source ID/label, original, proposed and reason. The user can accept into the draft, edit wording, or reject; no automatic save/export of proposals. Applying checks current source text and label to avoid replacing a newer unsaved section. Accepted text remains dirty until explicit save, which invalidates cached analysis. Free-form generated rewrites and numeric/entity heuristics are deliberately deferred: preserving existing lines provides a stronger factual boundary for this release.
+
+One review uses one provider request with a 25-second timeout and no automatic retries, one active review per account/process, rate limiting and a revision cache. Token usage is retained/logged alongside bounded event categories, never JD/resume/provider payloads. Currency cost stays unknown. A completed review is written only if the same owned version/revision still exists; concurrent edits/deletion discard it with 409. Distinguish provider authentication/model/rate/timeout/output failures using safe codes and operator logs. Recovery does not overwrite resume data. The Groq SDK timeout class is checked using `instanceof` because its `name` is simply `Error` in the installed SDK.
+
+**Consequences:** no new infrastructure or production dependency; editing and export still work when AI is unavailable. The same Vercel/Render/Mongo deployment topology can serve this workflow after release approval. Future high-volume versions should use a separately justified storage/retention design; arbitrary version counts are not supported. M4 still needs user-confirmed gap plans and real-user validation, and production release gates remain unchanged.
+
 ## ADR-008 — A saved base resume before job-specific intelligence
 
 **Status:** accepted, owner approved editor-first direction on 2026-11-17.

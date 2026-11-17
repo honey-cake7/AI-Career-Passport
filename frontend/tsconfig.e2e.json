@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "types": ["node", "vite/client"],
+    "incremental": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/e2e.tsbuildinfo"
+  },
+  "include": ["e2e", "playwright.config.ts"]
+}

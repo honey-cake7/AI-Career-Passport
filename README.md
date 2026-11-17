@@ -13,12 +13,16 @@ An existing React/TypeScript, Express, MongoDB and Qdrant prototype being improv
 | Resume PDF upload | One PDF up to 10 MB, MIME/signature/text bounds. Groq extracts structured fields; FastEmbed/Qdrant normalize skills. Extracted content is runtime-validated before persistence. Import creates a resume; it cannot replace existing edits. Parsing resource isolation and AI factuality evaluation remain incomplete. |
 | Profile persistence | Personal info, experience, education, projects and skills persist. New uploads do not retain raw resume text. |
 | Review/edit | Manual creation, editable contact/summary/skills/experience/projects/education, explicit validated save and reload. Atomic revisions prevent lost updates; errors retain the current draft. Editing/save/export need no AI services. |
-| Job analysis | Legacy optimizer API remains, with an unchecked model score/rewrite contract. Removed from the editor UI pending validated evidence-based job review and approval. Never treat its score as hiring probability. |
+| Job analysis | “Tailor for a job” extracts requirements with exact JD quotes. Server-side exact/alias matching distinguishes work mentions, listed claims, missing mentions and unassessable context. No hiring/readiness score. Negations and alternatives are conservatively unassessed. Only the JD is sent to Groq for this workflow. |
 | PDF export | Saved-revision PDF preview and download use the same file. One PDFKit A4 layout with bundled Noto Sans fonts; original import layout is not preserved. Full multilingual coverage and advanced pagination remain open. |
 | Public sharing | Disabled: legacy links exposed contact data without explicit consent. |
-| Resume versions/application tracking | Planned; not implemented. |
+| Job-specific resumes | Up to 20 owner-only editable copies of the saved base, each with its own JD, revision and cached review. Accept/edit/reject line-order suggestions; save and export separately. Base changes do not synchronize into copies. This is not immutable edit history. |
+| Gap actions | Conditional next steps for adding real evidence or completing a small tested project task. No assumption that a missing mention means a missing skill; personalized curricula and progress tracking remain planned. |
+| Application tracking | Planned; not implemented. |
 
 See the [technical audit](docs/architecture/AUDIT.md), [phased roadmap](docs/architecture/ROADMAP.md), [architecture decisions](docs/architecture/DECISIONS.md), [first milestone](docs/architecture/MILESTONE-1.md) and [editor milestone](docs/architecture/MILESTONE-2.md). Roadmap items are not claims of implemented features.
+
+The [job-review milestone report](docs/architecture/MILESTONE-3.md) explains the current workflow, test evidence and limitations. After saving a base resume, choose **Tailor for a job → enter a version name and job description → Create job version → Review this job**. Inspect quotes/evidence and next steps, accept/edit/reject suggestions, save, then preview/download the tailored PDF. Suggestions bring relevant existing lines first and preserve every line; they do not freely generate new achievements. You may rewrite wording yourself before saving. Deleting the base also deletes all its job versions; deleting one version keeps the base.
 
 ## Run locally
 
@@ -48,6 +52,8 @@ npm run dev
 
 Open `http://localhost:5173`, create an account and upload a synthetic resume first. Upload sends extracted resume text to Groq; review the provider's retention terms before using personal data. Text is processed in memory and structured profile data is saved in MongoDB. Local FastEmbed may download its model on first normalization. Seeded taxonomy data is required for useful Qdrant matches.
 
+Job review uses the existing Groq configuration and MongoDB, with no additional service or local embedding inference. Job descriptions, reviewed excerpts and the edited content are saved privately with the version. Provider retention is not controlled by deleting your local version.
+
 The existing `backend/docker-compose.yml` is a **development example**; its images, DB port bindings and backend Dockerfile still need hardening. If using it locally, supply the same Groq/environment values and run `docker compose up --build` from `backend`. No production deployment is part of this milestone.
 
 **Taxonomy seed caution:** `npm run seed:skills` currently deletes/recreates the configured Qdrant collection. Use a disposable local collection only. A non-destructive versioned seed is planned. Do not point this command at shared or production data.
@@ -73,11 +79,14 @@ Frontend:
 cd frontend
 npm run lint
 npm run build
+npm run typecheck:tests
 npx playwright install chromium
 npm run test:e2e
 ```
 
 Playwright exercises the real editor in desktop/mobile Chromium using synthetic API responses. Mongo integration tests independently verify the real HTTP/database/PDF path. These are complementary checks, not a live-provider end-to-end evaluation. Recorded results and limitations are in the milestone report; complete accessibility/AI evaluation CI remains open.
+
+An optional single-call live check uses synthetic data only: from `backend`, run `node --import tsx test/manual/review-job.ts --live`. It uses the configured Groq key/model and consumes provider quota. Automated test suites do not run it. One successful example does not establish extraction accuracy.
 
 ## API boundary
 
@@ -93,12 +102,18 @@ Authenticate using `Authorization: Bearer <token>` returned by registration/logi
 | PUT | `/api/profile/:profileId` | Save `{revision, content}` using the complete resume content above. Returns updated profile/revision. Invalid fields return 400; stale revision returns 409 without modifying the saved document. |
 | POST | `/api/profile/upload` | One multipart `resume` PDF; extra text/ownership fields rejected. Existing profile returns 409 without replacement. |
 | POST | `/api/profile/:profileId/optimize` | Owner-only; `{ jobDescription }` with 1–20,000 characters. |
+| GET / POST | `/api/profile/:profileId/versions` | List metadata, or create `{label, jobDescription, revision}` from the saved base; atomic 20-version limit. |
+| GET / PUT / DELETE | `/api/profile/:profileId/versions/:versionId` | Load, save `{revision, content}`, or delete one owned job version. Saving invalidates its review. |
+| POST | `/api/profile/:profileId/versions/:versionId/review` | `{revision}`; verified requirements, literal evidence, next steps and safe line-order suggestions. Cached for the saved revision; failures do not change resume content. |
+| GET | `/api/profile/:profileId/versions/:versionId/export?revision=0` | Saved job-version PDF; revision is mandatory and stale requests return 409. |
 | GET | `/api/profile/:profileId/export?revision=0` | Owner-only saved-profile PDF; supplied stale revision returns 409. |
 | DELETE | `/api/profile/:profileId` | Delete owner's saved profile, including private fields. |
 | GET | `/api/profile/public/:slug` | Always 404; legacy public disclosure disabled. |
 | GET | `/api/health` | Process liveness only; does not prove dependency readiness. |
 
 Unauthorized private requests return 401; missing/foreign profiles return the same 404. Responses are no-store. CORS permits only the configured frontend origin (localhost in development by default). Rate limits are per API process and conservative IP/account limits; multi-instance quotas and trusted-proxy configuration remain release work.
+
+The legacy `/optimize` API remains for compatibility with its unchecked model-score contract. The new UI never calls it; it is not an alternative evidence-based scoring endpoint. Job reviews make one bounded provider call (25-second timeout, no automatic retries), log only durations/counts/token usage and admit one active review per account per API process. A version has a 500 KiB JSON content/JD/review budget as well as the 20-version cap. Cost in currency is not estimated without verified pricing. Job description/model errors and provider rate limits are recoverable UI states.
 
 ## Privacy and release boundaries
 

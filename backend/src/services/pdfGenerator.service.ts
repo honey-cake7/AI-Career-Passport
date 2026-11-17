@@ -1,6 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { fileURLToPath } from 'node:url';
-import { IProfile } from '../models/Profile.js';
+import type { ResumeContent } from '../validation/resume.js';
 
 function safeLink(value?: string) {
   if (!value) return undefined;
@@ -15,7 +15,7 @@ function safeLink(value?: string) {
  * @param profile The profile document from MongoDB
  * @returns A Promise that resolves to a Buffer containing the binary PDF data
  */
-export async function generateProfilePdf(profile: IProfile): Promise<Buffer> {
+export async function generateProfilePdf(profile: ResumeContent): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ margin: 50, size: 'A4' });

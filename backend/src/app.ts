@@ -5,6 +5,8 @@ import profileRoutes from './routes/profile.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import { rateLimit } from './security/rateLimit.js';
 import { SkillPipelineError } from './utils/skillPipeline.js';
+import { ResumeInputError } from './validation/resume.js';
+import { JobReviewError } from './services/jobReviewError.js';
 
 export function createApp(profileRouter = profileRoutes) {
   const app = express();
@@ -26,6 +28,12 @@ export function createApp(profileRouter = profileRoutes) {
   app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
   app.use((_req, res) => { res.status(404).json({ success: false, error: 'Route not found' }); });
   app.use((err: Error & { status?: number }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (err instanceof ResumeInputError) {
+      res.status(400).json({ success: false, error: err.message }); return;
+    }
+    if (err instanceof JobReviewError) {
+      res.status(503).json({ success: false, code: err.code, error: err.message }); return;
+    }
     if (err instanceof SkillPipelineError) {
       res.status(503).json({ success: false, error: err.message }); return;
     }

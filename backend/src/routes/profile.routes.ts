@@ -5,6 +5,7 @@ import { requireAuth } from '../security/auth.js';
 import { rateLimit } from '../security/rateLimit.js';
 import type { ExtractedProfile } from '../services/profileExtractor.service.js';
 import { parseResumeContent, parseResumeSave, ResumeInputError } from '../validation/resume.js';
+import { createVersionRouter } from './version.routes.js';
 
 // Lazy loading keeps authentication independent of AI keys and native models.
 const services = {
@@ -30,7 +31,7 @@ export function profileUpdate(extracted: ExtractedProfile, skills: string[]) {
   };
 }
 
-export function createProfileRouter(deps = services) {
+export function createProfileRouter(deps = services, versionRouter = createVersionRouter()) {
   const router = Router();
   // Existing slugs were published without consent. Never grant them public access.
   router.get('/public/:slug', (_req, res) => {
@@ -126,6 +127,7 @@ export function createProfileRouter(deps = services) {
     }
     res.json({ success: true, data: await deps.optimize(res.locals.profile, jobDescription) });
   });
+  router.use('/:profileId/versions', versionRouter);
   router.put('/:profileId', async (req, res) => {
     let input;
     try { input = parseResumeSave(req.body); }

@@ -3,6 +3,7 @@ import { isAxiosError } from 'axios';
 import { ResumeUpload } from './components/ResumeUpload';
 import { ResumeEditor } from './components/ResumeEditor';
 import { AuthForm } from './components/AuthForm';
+import { JobWorkspace } from './components/JobWorkspace';
 import { apiClient, setSessionToken } from './api/axios';
 import type { IProfile } from './types';
 
@@ -12,6 +13,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [dirty, setDirty] = useState(false);
+  const [view, setView] = useState<'base' | 'jobs'>('base');
   const sessionEpoch = useRef(0);
   useEffect(() => {
     localStorage.removeItem('passport_profile');
@@ -29,7 +31,7 @@ function App() {
     finally { if (sessionEpoch.current === epoch) setLoading(false); }
   }
   async function signIn() {
-    sessionEpoch.current++; setProfile(null); setSignedIn(true); setDirty(false); await load();
+    sessionEpoch.current++; setProfile(null); setSignedIn(true); setDirty(false); setView('base'); await load();
   }
   async function signOut() {
     if (dirty && !window.confirm('Sign out and discard unsaved changes?')) return;
@@ -58,11 +60,17 @@ function App() {
   }
   if (!signedIn) return <><AuthForm onSignIn={() => void signIn()} />{error && <p className="auth-message" role="status">{error}</p>}</>;
   const epoch = sessionEpoch.current;
+  function changeView(next: 'base' | 'jobs') {
+    if (view === next || (dirty && !window.confirm('Discard unsaved changes and switch workspaces?'))) return;
+    setDirty(false); setView(next);
+    if (next === 'base') void load();
+  }
   return <>
     <header className="app-header"><a href="#main" className="brand"><span className="brand-mark" aria-hidden="true">CP</span> Career Passport</a><div className="header-right"><span>Private workspace</span><button onClick={() => void signOut()}>Sign out</button></div></header>
     <main id="main" className="workspace">
+      {profile && <nav className="workspace-nav" aria-label="Resume workspace"><button aria-current={view === 'base' ? 'page' : undefined} onClick={() => changeView('base')}>Base resume</button><button aria-current={view === 'jobs' ? 'page' : undefined} onClick={() => changeView('jobs')}>Tailor for a job</button></nav>}
       {error && <div className="error" role="alert">{error} {!profile && <button onClick={() => void load()}>Reload saved resume</button>}</div>}
-      {loading ? <p role="status">Loading your resume…</p> : profile ? <ResumeEditor key={`${epoch}:${profile.profileId}`} profile={profile} onDirty={setDirty} onSaved={saved => { if (sessionEpoch.current === epoch) setProfile(saved); }} onDeleted={() => { if (sessionEpoch.current === epoch) { setProfile(null); setDirty(false); } }} /> : !error && <div className="start-layout"><div className="start-intro"><p className="eyebrow">A BETTER STARTING POINT</p><h1>Your experience.<br />Clearly expressed.</h1><p>A thoughtful place to review, edit, and prepare your resume. Start with what you have, and make every detail your own.</p><p className="editorial-caption">Built around your words and your work.</p></div><div className="start-card"><ResumeUpload onUploadSuccess={uploaded => { if (sessionEpoch.current === epoch) setProfile(uploaded); }} /><form className="manual-option" onSubmit={event => void create(event)}><p>Prefer to write it yourself?</p><label>Full name<input name="fullName" required maxLength={300} autoComplete="name" /></label><button>Start a blank resume →</button><p className="hint">No AI processing needed.</p></form></div></div>}
+      {loading ? <p role="status">Loading your resume…</p> : profile && view === 'jobs' ? <JobWorkspace key={epoch + ':' + profile.profileId} base={profile} onDirty={setDirty} /> : profile ? <ResumeEditor key={`${epoch}:${profile.profileId}`} profile={profile} onDirty={setDirty} onSaved={saved => { if (sessionEpoch.current === epoch) setProfile(saved); }} onDeleted={() => { if (sessionEpoch.current === epoch) { setProfile(null); setDirty(false); } }} /> : !error && <div className="start-layout"><div className="start-intro"><p className="eyebrow">A BETTER STARTING POINT</p><h1>Your experience.<br />Clearly expressed.</h1><p>A thoughtful place to review, edit, and prepare your resume. Start with what you have, and make every detail your own.</p><p className="editorial-caption">Built around your words and your work.</p></div><div className="start-card"><ResumeUpload onUploadSuccess={uploaded => { if (sessionEpoch.current === epoch) setProfile(uploaded); }} /><form className="manual-option" onSubmit={event => void create(event)}><p>Prefer to write it yourself?</p><label>Full name<input name="fullName" required maxLength={300} autoComplete="name" /></label><button>Start a blank resume →</button><p className="hint">No AI processing needed.</p></form></div></div>}
     </main><footer className="app-footer">Career Passport <span>Keep your experience honest. Make it clear.</span></footer>
   </>;
 }
