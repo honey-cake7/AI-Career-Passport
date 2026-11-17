@@ -61,6 +61,13 @@ fieldset { padding: 0; margin: 0; min-width: 0; border: 0; }
 .error { margin: 16px; padding: 14px; background: #fff0e9; color: #8a3022; border: 1px solid #e4b8a9; border-radius: 4px; overflow-wrap: anywhere; }
 .notice { margin: 16px; padding: 12px; border: 1px solid #b7cdb2; color: #285638; background: #edf5e8; border-radius: 4px; }
 .danger-link { border: 0; color: #904330; padding-left: 0; font-weight: 400; }
+.account-settings { max-width: 720px; margin: 24px auto; }
+.account-settings > p { margin: 20px 0; }
+.account-delete-form { padding: 28px; margin-top: 32px; background: #fffefa; border: 1px solid #dcc8ba; border-radius: 6px; }
+.account-delete-form label { margin-top: 24px; }
+.account-delete-form .actions { margin-top: 28px; }
+.danger-button { background: #873c2e; color: #fff; border-color: #873c2e; }
+.danger-button:hover:not(:disabled) { background: #6e2b20; color: #fff; }
 .start-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; max-width: 1120px; margin: 55px auto; align-items: center; }
 .start-intro h1 { font-size: clamp(3rem, 5vw, 4.6rem); }
 .start-intro > p:not(.eyebrow) { margin-top: 28px; font-size: 1.05rem; max-width: 400px; }
@@ -131,3 +138,4 @@ select { display: block; width: 100%; margin: 8px 0 16px; padding: .7rem; border
 @media (max-width: 650px) { .job-start-grid { grid-template-columns: minmax(0, 1fr); } .job-create, .version-list, .job-review { padding: 20px; } .version-context { flex-wrap: wrap; } }
 @media (max-width: 950px) { .editor-layout { grid-template-columns: minmax(0, 1fr); } .document-aside { position: static; } .start-layout, .auth-shell { gap: 35px; } .workspace-heading { align-items: start; flex-direction: column; } }
 @media (max-width: 650px) { .app-header { height: 74px; padding: 0 16px; } .header-right > span { display: none; } .workspace { padding: 30px 16px; } .start-layout, .auth-shell { grid-template-columns: 1fr; margin: 0 auto; } .auth-shell { padding-top: 24px; } .start-layout { gap: 32px; } .start-card, .auth-card, .preview-card { padding: 22px; } .field-grid { grid-template-columns: 1fr; } .editor-section { padding: 22px; } .document-toolbar { flex-wrap: wrap; padding: 16px; } .document-toolbar .actions { width: 100%; } .entry-heading { align-items: start; } .app-footer { flex-direction: column; } }
+@media (max-width: 650px) { .brand { font-size: .95rem; gap: .4rem; } .header-right { gap: .4rem; } .header-right button { padding: .5rem; } .account-delete-form { padding: 20px; } }

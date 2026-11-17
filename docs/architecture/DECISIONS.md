@@ -2,6 +2,20 @@
 
 Updated: 2026-11-17. Baseline context and evidence: [AUDIT.md](AUDIT.md). ADR-008 supersedes the preview-only behavior and upload replacement described in earlier M1 decisions; JSON body size is now 256 KiB for bounded full-document saves. ADR-011 supersedes earlier decisions to keep the legacy optimizer operational.
 
+## ADR-012 — Password-confirmed, resumable account deletion on one API process
+
+**Status:** accepted for M5B; multi-process deployment remains blocked pending a shared write fence.
+
+Accept DELETE `/api/auth/account` with only the current password and exact typed `DELETE` confirmation. Derive ownership from the active bearer session; never accept an email or owner ID. Limit confirmation attempts per authenticated account. A wrong password returns 403 without closing a valid session; invalid/expired/deletion-pending accounts fail authentication. Every authenticated request now checks that the user still exists and has no deletion marker, independently of session TTL cleanup.
+
+Serialize account deletion and all root profile/session creation through a short per-account lock. Expensive parsing/password verification stays outside the lock. Immediately before creating a profile or issuing a session, recheck active user state inside it. This prevents an upload or login admitted earlier from recreating records after deletion. Existing profile/version writes do not upsert and cannot recreate a deleted parent. Different owners retain independent locks.
+
+Persist `User.deletionRequestedAt` before cleanup, then delete owned profiles (including embedded versions/reviews/plans), all sessions, and the user last. Pending accounts cannot log in or use existing sessions even if cleanup fails before sessions are removed. Each cleanup step is idempotent. Return 204 only after successful live-data cleanup; 202 when the access barrier exists but cleanup needs retry. The server retries marked accounts at startup and every minute, up to 20/pass. Retain the marker and credentials until dependent data is removed; no cancel/restore path is promised after confirmation. Index the sparse marker for recovery lookup. Fixed event names exclude passwords, emails, IDs and private database errors.
+
+This preserves compatibility with the owner's standalone local MongoDB service, with no new collection, replica-set configuration or external worker. The lock is deliberately per-process: one active backend process is required, including during rollouts. A database-wide fence/transaction design covering both root creation and deletion is required before horizontal/clustered/overlapping deployment. An isolated transaction around deletion alone would not stop a late root insert outside it.
+
+**Consequences:** the browser clears token/profile state after 204 or validated 202, distinguishes pending cleanup, never persists confirmation credentials, and clears the password after submission. Confirmation failures remain visible; unknown/network/5xx results do not claim deletion. Normal navigation protects existing resume/plan drafts. Other tabs lose access on their next request; already delivered bytes cannot be recalled. Provider records, downloaded files and backups are outside the live-Mongo purge. Backup restore needs deletion reconciliation before production release; password recovery and email verification remain separate work.
+
 ## ADR-011 — Retire unchecked optimization and verify the development branch in CI
 
 **Status:** accepted for the first M5 release-hardening milestone.

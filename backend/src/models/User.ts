@@ -5,6 +5,7 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 export interface IUser extends Document {
   email: string;
   passwordHash: string;
+  deletionRequestedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -27,6 +28,7 @@ const UserSchema = new Schema<IUser>(
       select: false,
       required: [true, 'Password hash is required'],
     },
+    deletionRequestedAt: { type: Date, index: true, sparse: true },
   },
   {
     timestamps: true, // Adds createdAt & updatedAt automatically

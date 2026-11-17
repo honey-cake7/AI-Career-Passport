@@ -9,6 +9,7 @@ An existing React/TypeScript, Express, MongoDB and Qdrant prototype being improv
 | Capability | Status |
 | --- | --- |
 | Account registration/login/logout | Implemented: salted scrypt passwords and one-hour revocable Mongo sessions. Browser token is memory-only; refresh requires login. |
+| Account deletion | Password and typed DELETE confirmation; removes the signed-in account, every session, base resume and embedded job data. Failed cleanup closes access and retries on server startup/every minute. Supports one active backend process; shared write fencing is required before scaling. |
 | Private profile ownership | Session-derived owner; owner-scoped upload, retrieval, AI analysis, PDF export and profile deletion. |
 | Resume PDF upload | One PDF up to 10 MB, MIME/signature/text bounds. Groq extracts structured fields; FastEmbed/Qdrant normalize skills. Extracted content is runtime-validated before persistence. Import creates a resume; it cannot replace existing edits. Parsing resource isolation and AI factuality evaluation remain incomplete. |
 | Profile persistence | Personal info, experience, education, projects and skills persist. New uploads do not retain raw resume text. |
@@ -28,6 +29,8 @@ The [job-review milestone report](docs/architecture/MILESTONE-3.md) explains the
 For [saved gap plans](docs/architecture/MILESTONE-4.md), expand **Choose a next step** beneath a requirement, select what is true for you, and choose **Save a focused plan**. Adapt the task and criteria in **Your next steps**. Record what you actually did before marking completion. Choose **Edit resume evidence**, make factual edits, save the resume, then **Reassess saved resume**. Completing a task never changes the resume or proves proficiency. Saved plans remain available after resume edits invalidate the AI review. Plans and notes are not sent to a model or included in the exported PDF.
 
 ## Run locally
+
+Account controls are under **Account** in the header. Deletion requires your current password and typing **DELETE**. **Keep my account** cancels without a request. Successful deletion signs out and clears this page; pending cleanup is described separately. Other sessions are rejected on their next request. Deleting only the resume in the editor keeps your account. See the [deletion milestone](docs/architecture/MILESTONE-5B.md) and [operator runbook](docs/operations/ACCOUNT_DELETION.md) for failure recovery and retention limits.
 
 Use Node.js 24 and npm with MongoDB available locally. Qdrant and Groq are needed for PDF import/normalization; manual creation, editing and export do not use them. The repository includes separate backend/frontend lockfiles. In PowerShell environments that block `npm.ps1`, use `npm.cmd` for the commands below.
 
@@ -102,6 +105,7 @@ Authenticate using `Authorization: Bearer <token>` returned by registration/logi
 | POST | `/api/auth/register` | `{ email, password }`, password 12–128 characters; returns one-hour session. |
 | POST | `/api/auth/login` | Verify credentials and issue a new session. |
 | POST | `/api/auth/logout` | Revoke current session. |
+| DELETE | `/api/auth/account` | Authenticated owner only; `{password, confirmation: "DELETE"}` with no owner/email fields. 403 for incorrect password, 400 for invalid confirmation/body, 429 after five attempts/account/15 minutes. 204 means live account/data removed; 202 means access closed and cleanup pending. |
 | GET | `/api/profile/me` | Current owner's saved profile or `null`. |
 | POST | `/api/profile` | Create one private base resume with `{personalInfo, experiences, education, projects, skills}`. Duplicate owner returns 409. |
 | PUT | `/api/profile/:profileId` | Save `{revision, content}` using the complete resume content above. Returns updated profile/revision. Invalid fields return 400; stale revision returns 409 without modifying the saved document. |
@@ -125,6 +129,8 @@ The legacy score/rewriting service has been removed. Its old `/optimize` path is
 
 ## Privacy and release boundaries
 
-New uploads do not retain raw text; saving corrections also removes legacy raw text for that profile. Logs omit resume/model content and connection strings. Other existing raw-text records, provider retention, backups and browser caches on devices that never open the updated app are not purged by a code change. Legacy shared-ID profiles cannot safely be claimed from resume email; no automatic migration is attempted. Profile deletion is implemented; account deletion, password recovery, email verification and consent-based public sharing remain open. Unsaved drafts remain in memory only and are lost on refresh/session expiry; save before leaving.
+New uploads do not retain raw text; saving corrections also removes legacy raw text for that profile. Logs omit resume/model content and connection strings. Other existing raw-text records, provider retention, backups and browser caches on devices that never open the updated app are not purged by a code change. Legacy shared-ID profiles cannot safely be claimed from resume email; no automatic migration is attempted. Profile and account deletion are implemented for owned live Mongo records; backups/provider records/downloaded copies need separate retention policies. Password recovery, email verification and consent-based public sharing remain open. Unsaved drafts remain in memory only and are lost on refresh/session expiry; save before leaving.
+
+Account deletion uses a durable access barrier plus per-account serialization for profile/session creation and cleanup. Keep **one active API process**; multi-instance, clustered or overlapping rolling deployments require a database-wide write fence first. Pending cleanup retries only while the backend and database are available, up to 20 marked accounts per pass. Backup-restore deletion reconciliation is not implemented, so this is not a completed production retention/recovery policy.
 
 Development-branch pushes are authorized. Merging to main and production deployment require separate owner approval. No claim of near-perfect extraction, ATS certification, guaranteed hiring outcomes or production security is made.

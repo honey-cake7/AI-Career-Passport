@@ -5,9 +5,12 @@ import { Session } from '../models/Session.js';
 import { hashPassword, verifyPassword } from '../security/passwords.js';
 import { hashToken, requireAuth } from '../security/auth.js';
 import { rateLimit } from '../security/rateLimit.js';
+import { withActiveAccount } from '../security/accountAccess.js';
+import { parseDeletionRequest, requestAccountDeletion } from '../services/accountDeletion.js';
 
 const router = Router();
 const credentialLimit = rateLimit(20, 15 * 60 * 1000);
+const deletionLimit = rateLimit(5, 15 * 60 * 1000);
 // Equal-cost comparison for unknown users, without a database lookup revealing existence.
 const dummyHash = hashPassword(randomBytes(32).toString('hex'));
 
@@ -32,20 +35,33 @@ for (const action of ['register', 'login'] as const) {
     } else {
       user = await User.findOne({ email: normalizedEmail }).select('+passwordHash');
       const valid = await verifyPassword(password, user?.passwordHash ?? await dummyHash);
-      if (!user || !valid) {
+      if (!user || user.deletionRequestedAt || !valid) {
         res.status(401).json({ success: false, error: 'Invalid email or password' });
         return;
       }
     }
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-    await Session.create({ userId: user._id, tokenHash: hashToken(token), expiresAt });
+    await withActiveAccount(user._id.toString(), () => Session.create({ userId: user._id, tokenHash: hashToken(token), expiresAt }));
     res.status(action === 'register' ? 201 : 200).json({ success: true, data: { token, expiresAt, email: user.email } });
   });
 }
 
 router.post('/logout', requireAuth, async (_req, res) => {
   await Session.deleteOne({ tokenHash: res.locals.tokenHash });
+  res.sendStatus(204);
+});
+
+router.delete('/account', requireAuth, deletionLimit, async (req, res) => {
+  const { password } = parseDeletionRequest(req.body);
+  const result = await requestAccountDeletion(res.locals.userId, password);
+  if (result === 'wrong_password') {
+    // 403 distinguishes failed confirmation from an expired bearer session.
+    res.status(403).json({ success: false, error: 'Current password is incorrect. This request did not start deletion.' }); return;
+  }
+  if (result === 'pending') {
+    res.status(202).json({ success: true, data: { status: 'pending', message: 'Account access is closed. Data deletion is pending and will retry automatically.' } }); return;
+  }
   res.sendStatus(204);
 });
 

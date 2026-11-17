@@ -2,6 +2,7 @@ import 'dotenv/config';
 
 import app from './app.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
+import { startDeletionRecovery } from './services/accountDeletion.js';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
@@ -9,6 +10,7 @@ async function startServer(): Promise<void> {
   try {
     // Connect to MongoDB
     await connectDatabase();
+    const stopDeletionRecovery = startDeletionRecovery();
 
     // Start Express server
     const server = app.listen(PORT, () => {
@@ -20,6 +22,7 @@ async function startServer(): Promise<void> {
     // ─── Graceful Shutdown ─────────────────────────────────
 
     const shutdown = async (signal: string) => {
+      stopDeletionRecovery();
       console.log(`\n🛑 ${signal} received. Shutting down gracefully...`);
       server.close(async () => {
         await disconnectDatabase();

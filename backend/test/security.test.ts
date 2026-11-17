@@ -26,6 +26,7 @@ let tokenB: string;
 let profileId: string;
 
 before(async () => {
+  mock.method(User, 'exists', async (query: any) => users.some(u => u._id.toString() === query._id?.toString()) ? { _id: query._id } : null);
   mock.method(User, 'create', async (data: any) => {
     if (users.some(u => u.email === data.email)) throw Object.assign(new Error('duplicate'), { code: 11000 });
     const user = { ...data, _id: new Types.ObjectId() }; users.push(user); return user;

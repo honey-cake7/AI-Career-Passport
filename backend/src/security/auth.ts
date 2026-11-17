@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { RequestHandler } from 'express';
 import { Session } from '../models/Session.js';
+import { User } from '../models/User.js';
 
 export const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 
@@ -12,7 +13,7 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
   }
   // TTL cleanup is asynchronous: expiry must also be enforced in the query.
   const session = await Session.findOne({ tokenHash: hashToken(match[1]), expiresAt: { $gt: new Date() } });
-  if (!session) {
+  if (!session || !await User.exists({ _id: session.userId, deletionRequestedAt: { $exists: false } })) {
     res.status(401).json({ success: false, error: 'Session expired or invalid' });
     return;
   }

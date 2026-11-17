@@ -6,6 +6,7 @@ import { rateLimit } from '../security/rateLimit.js';
 import type { ExtractedProfile } from '../services/profileExtractor.service.js';
 import { parseResumeContent, parseResumeSave, ResumeInputError } from '../validation/resume.js';
 import { createVersionRouter } from './version.routes.js';
+import { withActiveAccount } from '../security/accountAccess.js';
 
 // Lazy loading keeps authentication independent of AI keys and native models.
 const services = {
@@ -58,7 +59,7 @@ export function createProfileRouter(deps = services, versionRouter = createVersi
       res.status(400).json({ success: false, error: error.message }); return;
     }
     try {
-      const profile = await Profile.create({ ...content, userId: res.locals.userId });
+      const profile = await withActiveAccount(res.locals.userId, () => Profile.create({ ...content, userId: res.locals.userId }));
       res.status(201).json({ success: true, data: profileData(profile) });
     } catch (error) {
       if ((error as { code?: number }).code !== 11000) throw error;
@@ -95,7 +96,7 @@ export function createProfileRouter(deps = services, versionRouter = createVersi
     }
     try {
       // A unique owner index also protects concurrent imports/manual creation.
-      const profile = await Profile.create({ ...content, userId: res.locals.userId });
+      const profile = await withActiveAccount(res.locals.userId, () => Profile.create({ ...content, userId: res.locals.userId }));
       res.json({ success: true, data: profileData(profile) });
     } catch (error) {
       if ((error as { code?: number }).code !== 11000) throw error;
