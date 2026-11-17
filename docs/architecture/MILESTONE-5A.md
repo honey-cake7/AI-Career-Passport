@@ -9,7 +9,7 @@ The existing UI used validated job-version review, but the old owner-only `/opti
 Checks previously relied on the developer running them locally. Add `.github/workflows/checks.yml` with these acceptance criteria:
 
 - Trigger on pushes to `feat/career-passport-v2` and pull requests targeting main/development. Run no deploy, merge, write-token or application-secret step.
-- Check current tracked files for known credential patterns and committed whitespace errors. This does not scan full Git history or detect every possible credential.
+- Check current tracked files for known credential patterns and the pushed/PR change range for whitespace errors. The source job fetches history to resolve its comparison base; it does not run a secret scan over history. On initial branch creation, compare the tip to its parent. This does not detect every possible credential.
 - Install from each committed lockfile with `npm ci`; use Node 24.18.0 from `.node-version` and Ubuntu 24.04. Integration tests explicitly use MongoDB 8.2.6, matching the installed library's current default, with generated local URIs only.
 - Build/typecheck backend and test code; run deterministic security/AI contract tests plus real disposable Mongo/PDF tests. No live Groq/Qdrant/inference service is required. Package, browser/native-library and Mongo binary downloads still require network access; model inference is not performed.
 - Run frontend lint with warnings treated as errors, types, build, and desktop/mobile Chromium workflows. In CI, two workers and an eight-minute browser limit bound execution; focused tests and flaky retries fail the run.
@@ -30,6 +30,8 @@ Local Windows/Node 24.18.0 evidence:
 | Hosted GitHub Actions | Result and run URL are reported with delivery after pushing. Inspect the run for the exact commit; no hosted success is inferred from local results. |
 
 The workflow intentionally receives no app secrets, including on trusted pushes. The test preload overwrites provider/database configuration as a second boundary. Browser requests are intercepted with synthetic fixtures; this is separate from real backend integration coverage, not a complete live provider/browser/database test.
+
+The initial hosted run passed clean installs, backend contracts/persistence and frontend static checks, but exposed a source-check configuration error: a depth-one checkout made Git treat the tip as a root commit and report pre-existing whitespace in unrelated files. The source job now fetches history and compares the actual pushed/PR range. The check remains enabled; no unrelated source files were reformatted to hide the configuration problem.
 
 The owner can find the run under **GitHub → Actions → Development checks**. Expected jobs: **Source safety**, **Backend contracts and persistence**, **Frontend and browser workflows**. On failure, inspect the first failing step and reproduce its command in the relevant package. Download `browser-results` for traces/reports; they contain synthetic fixtures only. Fix and push normally; do not bypass checks or deploy a failing revision. Package/browser/Mongo download failures are infrastructure failures, not evidence that application tests passed. Do not add production credentials to make synthetic tests run.
 

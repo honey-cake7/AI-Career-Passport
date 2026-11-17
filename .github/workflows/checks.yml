@@ -23,6 +23,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The pushed/PR base may precede several commits. A depth-one checkout
+          # makes git treat the tip as a root and report unrelated legacy lines.
+          fetch-depth: 0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
@@ -30,7 +33,13 @@ jobs:
       - name: Check tracked files for credential patterns
         run: node scripts/check-secrets.mjs
       - name: Check committed whitespace
-        run: git -c core.safecrlf=false show --format= --check HEAD
+        env:
+          CHECK_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [[ -z "$CHECK_BASE_SHA" || "$CHECK_BASE_SHA" =~ ^0+$ ]]; then
+            CHECK_BASE_SHA="$(git rev-parse HEAD^)"
+          fi
+          git -c core.safecrlf=false diff --check "$CHECK_BASE_SHA" HEAD
 
   backend:
     name: Backend contracts and persistence
