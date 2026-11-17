@@ -15,7 +15,7 @@ Owner-approved focus: **a job-focused resume editor**. The editor imports struct
 | M2: persisted editor | Manual creation or PDF import; bounded owner-only corrections; reload and PDF contain saved corrections; stale concurrent saves/duplicate imports cannot overwrite; saved PDF preview/download share bytes; mobile/desktop browser tests and real Mongo/PDF tests pass. | Implemented; verification recorded in MILESTONE-2.md. |
 | M3: one-job review and versions | Create owner-scoped job version without mutating base. Validated requirements cite exact JD excerpts; explanations identify profile evidence or unknowns. No hiring score. Reject malformed/injection fixtures. Every proposal has original, proposed, reason and source; accept/edit/reject is explicit and export uses approved saved content. Test stale analyses, version ownership and base preservation. | Implemented; verification and scoped limits in MILESTONE-3.md. Suggestions reorder existing lines; free-form AI rewrites are deferred. |
 | M4: actionable gaps | Distinguish listed claims, missing mentions, user-confirmed practice needs and unassessable requirements. Save a scoped editable task with criteria, private outcome notes and self-reported status; manually update resume evidence and reassess locally. Verify ownership, conflicting edits, completion boundaries and draft recovery. Run a small user pilot without claiming proven demand. | Technical scope implemented; checks and limits in MILESTONE-4.md. Real-user pilot remains open, so the full milestone is not marked complete. |
-| M5: release hardening | Finish outstanding phase 1/2 security and provider contracts; establish held-out AI evaluations, accessibility checks, parsing/inference resource budgets on the actual host, CI, recovery/deletion and deployment runbooks. No production release before gates pass. | Planned |
+| M5: release hardening | Finish outstanding phase 1/2 security and provider contracts; establish held-out AI evaluations, accessibility checks, parsing/inference resource budgets on the actual host, CI, recovery/deletion and deployment runbooks. No production release before gates pass. | In progress. M5A removes the legacy unchecked optimizer and adds no-secret CI; see MILESTONE-5A.md. Remaining release gates stay open. |
 | Later | Optional bounded GitHub evidence import, sharing or application tracking only after demonstrated need. | Deferred |
 
 The six engineering phases below remain cross-cutting release gates. Editor progress is not completion of authentication lifecycle, AI reliability or production readiness.
@@ -86,7 +86,7 @@ Acceptance criteria:
 
 ## Phase 5 — Testing, performance and DevOps
 
-Status: **not started**. Tests required by earlier milestones land with those milestones.
+Status: **in progress**. M5A adds reproducible CI checks and retires the unused unchecked scoring/rewriting API. Dependency triage, resource measurements on the actual host, image/deployment hardening and recovery remain open.
 
 Acceptance criteria:
 

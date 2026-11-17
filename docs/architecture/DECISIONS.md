@@ -1,6 +1,16 @@
 # Architecture decisions
 
-Updated: 2026-11-17. Baseline context and evidence: [AUDIT.md](AUDIT.md). ADR-008 supersedes the preview-only behavior and upload replacement described in earlier M1 decisions; JSON body size is now 256 KiB for bounded full-document saves.
+Updated: 2026-11-17. Baseline context and evidence: [AUDIT.md](AUDIT.md). ADR-008 supersedes the preview-only behavior and upload replacement described in earlier M1 decisions; JSON body size is now 256 KiB for bounded full-document saves. ADR-011 supersedes earlier decisions to keep the legacy optimizer operational.
+
+## ADR-011 — Retire unchecked optimization and verify the development branch in CI
+
+**Status:** accepted for the first M5 release-hardening milestone.
+
+Remove the unused service that returned a model-invented match score and unchecked rewrites. Keep a POST tombstone at the old path with 410 `endpoint_retired` and guidance toward job-version review. Authentication and owner lookup run first, so anonymous requests remain 401 and foreign/missing profiles remain indistinguishable 404s. A retirement response processes no job text, initializes no provider and makes no writes. Existing UI callers already use the separate validated job-review workflow, so the useful editing/review/export path is preserved. External consumers of the old API must migrate; preserving an unsafe response contract has no product benefit here.
+
+Add three GitHub Actions jobs: source credential-pattern/whitespace checks, backend build/contract/disposable-Mongo tests, and frontend lint/types/build/browser tests. Use explicit Node and Mongo versions, lockfile installs and Ubuntu 24.04. Pin GitHub-owned actions to full commit SHAs, grant only `contents: read`, disable persisted checkout credentials, and supply no production secrets or deployment credentials. PRs use `pull_request`, never a privileged `pull_request_target` execution of untrusted source. Cancel superseded runs, bound job/browser runtime, fail focused/flaky browser tests, and retain only synthetic browser reports for seven days. Do not cache private data or downloaded models.
+
+**Consequences:** no additional runtime dependency or hosting service. CI tests real database/PDF behavior and mocked provider/UI interactions, not production AI quality, host memory or real-world demand. Source pattern checks are a limited current-tree safeguard, not a complete secret/history scanner. Required status checks are a repository setting; this workflow does not silently enable branch protection, merge, deploy, or certify the full release.
 
 ## ADR-010 — Private gap plans separate task progress from resume evidence
 

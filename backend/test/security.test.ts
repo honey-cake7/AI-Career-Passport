@@ -16,7 +16,7 @@ import { readData, readError, type AuthData, type SavedProfile } from './http.js
 const users: any[] = [];
 const sessions: any[] = [];
 const profiles: any[] = [];
-const calls = { parse: 0, optimize: 0, pdf: 0, writes: 0 };
+const calls = { parse: 0, pdf: 0, writes: 0 };
 const extracted = { personalInfo: { fullName: 'Test Candidate' }, experiences: [], education: [],
   projects: [{ title: 'Portfolio', description: 'Built a test app', techStack: ['TypeScript'] }] };
 let server: Server;
@@ -58,7 +58,6 @@ before(async () => {
     parse: async () => { calls.parse++; return 'Synthetic resume text'; },
     extract: async () => extracted,
     normalize: async () => ['TypeScript'],
-    optimize: async () => { calls.optimize++; return { matchScore: 0, missingHardSkills: [], missingSoftSkills: [], recommendations: [], optimizedBullets: [] }; },
     pdf: async () => { calls.pdf++; return Buffer.from('%PDF-test'); },
   }));
   server = app.listen(0, '127.0.0.1');
@@ -87,7 +86,7 @@ test('every private endpoint rejects anonymous and malformed sessions before wor
     assert.equal((await request('/api/profile' + path, method)).status, 401);
     assert.equal((await request('/api/profile' + path, method, 'forged')).status, 401);
   }
-  assert.deepEqual(calls, { parse: 0, optimize: 0, pdf: 0, writes: 0 });
+  assert.deepEqual(calls, { parse: 0, pdf: 0, writes: 0 });
 });
 test('registration validates credentials and creates hashed, expiring sessions', async () => {
   assert.equal((await request('/api/auth/register', 'POST', undefined, { email: {}, password: 'x' })).status, 400);
@@ -137,17 +136,24 @@ test('cross-user optimize/export/delete are indistinguishable from missing profi
     const response = await request(`/api/profile/${profileId}${suffix}`, method, tokenB, method === 'POST' ? { jobDescription: 'test' } : undefined);
     assert.equal(response.status, 404); assert.equal(await readError(response), 'Profile not found');
   }
-  assert.equal(calls.optimize, 0); assert.equal(calls.pdf, 0); assert.equal(profiles.length, 1);
+  assert.equal(calls.pdf, 0); assert.equal(profiles.length, 1);
 });
-test('owner can export and optimize; invalid IDs and job payloads are rejected', async () => {
+test('owner can export and invalid IDs are rejected', async () => {
   assert.equal((await request('/api/profile/not-an-id/export', 'GET', tokenA)).status, 400);
-  for (const jobDescription of [{ $ne: null }, ' ', 'x'.repeat(20001)]) {
-    assert.equal((await request(`/api/profile/${profileId}/optimize`, 'POST', tokenA, { jobDescription })).status, 400);
-  }
   const pdf = await request(`/api/profile/${profileId}/export`, 'GET', tokenA);
   assert.equal(pdf.status, 200); assert.match(pdf.headers.get('content-type')!, /application\/pdf/);
-  assert.equal((await request(`/api/profile/${profileId}/optimize`, 'POST', tokenA, { jobDescription: 'TypeScript developer' })).status, 200);
-  assert.equal(calls.optimize, 1); assert.equal(calls.pdf, 1);
+  assert.equal(calls.pdf, 1);
+});
+test('retired optimization returns no scores or rewrites and causes no side effects for any body', async () => {
+  const beforeCalls = { ...calls }; const beforeProfiles = structuredClone(profiles);
+  for (const body of [{}, { jobDescription: 'TypeScript developer' }, { jobDescription: { $ne: null }, userId: 'forged' }, { jobDescription: 'x'.repeat(20001) }]) {
+    const response = await request(`/api/profile/${profileId}/optimize`, 'POST', tokenA, body);
+    assert.equal(response.status, 410);
+    const payload = await response.json();
+    assert.deepEqual(payload, { success: false, code: 'endpoint_retired', error: 'Legacy optimization has been retired. Create a job version and use its review endpoint.' });
+    assert.match(response.headers.get('cache-control')!, /no-store/);
+  }
+  assert.deepEqual(calls, beforeCalls); assert.deepEqual(profiles, beforeProfiles);
 });
 test('legacy public links never read or disclose profile data', async () => {
   assert.equal((await request('/api/profile/public/legacy-link')).status, 404);

@@ -18,6 +18,7 @@ An existing React/TypeScript, Express, MongoDB and Qdrant prototype being improv
 | Public sharing | Disabled: legacy links exposed contact data without explicit consent. |
 | Job-specific resumes | Up to 20 owner-only editable copies of the saved base, each with its own JD, revision and cached review. Accept/edit/reject line-order suggestions; save and export separately. Base changes do not synchronize into copies. This is not immutable edit history. |
 | Gap plans | Up to 20 private plans per job version. Confirm existing experience, need for practice, or need for manual checking; adapt a focused task and completion criteria; save status, outcome notes and an optional URL. Completion is self-reported. Reassess the original requirement against saved resume text without another AI call. Personalized curricula and verified proficiency are not provided. |
+| Automated checks | GitHub Actions checks source patterns/whitespace, lockfile installs, backend contracts and disposable MongoDB persistence, frontend lint/types/build and desktop/mobile Chromium workflows. Synthetic tests require no production secrets. This is not a production-readiness certification. |
 | Application tracking | Planned; not implemented. |
 
 See the [technical audit](docs/architecture/AUDIT.md), [phased roadmap](docs/architecture/ROADMAP.md), [architecture decisions](docs/architecture/DECISIONS.md), [first milestone](docs/architecture/MILESTONE-1.md) and [editor milestone](docs/architecture/MILESTONE-2.md). Roadmap items are not claims of implemented features.
@@ -73,7 +74,7 @@ npm test
 npm run test:integration
 ```
 
-The fast HTTP/security suite replaces database methods and expensive services with synthetic doubles. The integration suite creates a disposable local MongoDB process, exercises real persistence and PDF generation/parsing, and replaces only model-dependent extraction/normalization/optimization. First run may download a large MongoDB binary; it never reads `MONGODB_URI` or contacts production databases. No Groq key, Qdrant server, model download or paid inference is needed for these suites. Live AI quality is not established by them.
+The fast HTTP/security suite replaces database methods and expensive services with synthetic doubles. The integration suite creates a disposable local MongoDB process, exercises real persistence and PDF generation/parsing, and replaces model-dependent extraction/normalization/job review. First run may download a large MongoDB binary; it never reads `MONGODB_URI` or contacts production databases. No Groq key, Qdrant server, model download or paid inference is needed for these suites. Live AI quality is not established by them.
 
 Frontend:
 
@@ -87,6 +88,8 @@ npm run test:e2e
 ```
 
 Playwright exercises the real editor in desktop/mobile Chromium using synthetic API responses. Mongo integration tests independently verify the real HTTP/database/PDF path. These are complementary checks, not a live-provider end-to-end evaluation. Recorded results and limitations are in the milestone report; complete accessibility/AI evaluation CI remains open.
+
+The [Development checks workflow](.github/workflows/checks.yml) runs on development-branch pushes and pull requests targeting main or development. It uses the Node version in `.node-version`, Ubuntu 24.04, `npm ci` with both lockfiles, and MongoDB 8.2.6 for disposable integration databases. It never deploys. Its token has read-only repository contents access; checkout does not retain credentials, and no application secrets are supplied. Synthetic browser reports/traces are retained for seven days. In CI, an exclusive test or flaky retry fails the browser job. See [M5A verification and troubleshooting](docs/architecture/MILESTONE-5A.md). Branch protection is not configured automatically; passing checks do not prevent merges until the owner requires them in repository rules.
 
 An optional single-call live check uses synthetic data only: from `backend`, run `node --import tsx test/manual/review-job.ts --live`. It uses the configured Groq key/model and consumes provider quota. Automated test suites do not run it. One successful example does not establish extraction accuracy.
 
@@ -103,7 +106,7 @@ Authenticate using `Authorization: Bearer <token>` returned by registration/logi
 | POST | `/api/profile` | Create one private base resume with `{personalInfo, experiences, education, projects, skills}`. Duplicate owner returns 409. |
 | PUT | `/api/profile/:profileId` | Save `{revision, content}` using the complete resume content above. Returns updated profile/revision. Invalid fields return 400; stale revision returns 409 without modifying the saved document. |
 | POST | `/api/profile/upload` | One multipart `resume` PDF; extra text/ownership fields rejected. Existing profile returns 409 without replacement. |
-| POST | `/api/profile/:profileId/optimize` | Owner-only; `{ jobDescription }` with 1–20,000 characters. |
+| POST | `/api/profile/:profileId/optimize` | Retired: authenticated owner receives 410 `endpoint_retired`, with no AI call or profile mutation. Anonymous requests receive 401; foreign/missing profiles receive 404. Use job-version review instead. |
 | GET / POST | `/api/profile/:profileId/versions` | List metadata, or create `{label, jobDescription, revision}` from the saved base; atomic 20-version limit. |
 | GET / PUT / DELETE | `/api/profile/:profileId/versions/:versionId` | Load, save `{revision, content}`, or delete one owned job version. Saving invalidates its review. |
 | POST | `/api/profile/:profileId/versions/:versionId/review` | `{revision}`; verified requirements, literal evidence, next steps and safe line-order suggestions. Cached for the saved revision; failures do not change resume content. |
@@ -118,7 +121,7 @@ Authenticate using `Authorization: Bearer <token>` returned by registration/logi
 
 Unauthorized private requests return 401; missing/foreign profiles return the same 404. Responses are no-store. CORS permits only the configured frontend origin (localhost in development by default). Rate limits are per API process and conservative IP/account limits; multi-instance quotas and trusted-proxy configuration remain release work.
 
-The legacy `/optimize` API remains for compatibility with its unchecked model-score contract. The new UI never calls it; it is not an alternative evidence-based scoring endpoint. Job reviews make one bounded provider call (25-second timeout, no automatic retries), log only durations/counts/token usage and admit one active review per account per API process. A version has a combined 500 KiB JSON content/JD/review/plan budget as well as the 20-version cap. Plan mutations return `{gapPlans, plansRevision, revision}`; they increment a separate plan counter, preserving resume revision and cached review. Stale resume or plan counters return 409. Plans use no additional provider calls or infrastructure. Cost in currency is not estimated without verified pricing. Job description/model errors and provider rate limits are recoverable UI states.
+The legacy score/rewriting service has been removed. Its old `/optimize` path is an authenticated, owner-scoped 410 response; it no longer accepts work for an unchecked AI contract. The current UI uses job-version reviews, which make one bounded provider call (25-second timeout, no automatic retries), log only durations/counts/token usage and admit one active review per account per API process. A version has a combined 500 KiB JSON content/JD/review/plan budget as well as the 20-version cap. Plan mutations return `{gapPlans, plansRevision, revision}`; they increment a separate plan counter, preserving resume revision and cached review. Stale resume or plan counters return 409. Plans use no additional provider calls or infrastructure. Cost in currency is not estimated without verified pricing. Job description/model errors and provider rate limits are recoverable UI states.
 
 ## Privacy and release boundaries
 

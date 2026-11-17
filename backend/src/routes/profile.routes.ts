@@ -12,7 +12,6 @@ const services = {
   parse: async (buffer: Buffer) => (await import('../services/pdfParser.service.js')).extractTextFromPdf(buffer),
   extract: async (text: string) => (await import('../services/profileExtractor.service.js')).extractProfileFromText(text),
   normalize: async (text: string) => (await import('../services/skillNormalizer.service.js')).normalizeSkillsFromResume(text),
-  optimize: async (profile: IProfile, text: string) => (await import('../services/profileOptimizer.service.js')).optimizeProfileForJob(profile, text),
   pdf: async (profile: IProfile) => (await import('../services/pdfGenerator.service.js')).generateProfilePdf(profile),
 };
 
@@ -119,13 +118,11 @@ export function createProfileRouter(deps = services, versionRouter = createVersi
     next();
   });
 
-  router.post('/:profileId/optimize', aiLimit, async (req, res) => {
-    const jobDescription = req.body?.jobDescription;
-    if (typeof jobDescription !== 'string' || !jobDescription.trim() || jobDescription.length > 20000) {
-      res.status(400).json({ success: false, error: 'Job description must contain 1–20,000 characters' });
-      return;
-    }
-    res.json({ success: true, data: await deps.optimize(res.locals.profile, jobDescription) });
+  // Keep auth and owner lookup ahead of the tombstone: a foreign profile must
+  // remain indistinguishable from a missing one. This path never invokes AI.
+  router.post('/:profileId/optimize', (_req, res) => {
+    res.status(410).json({ success: false, code: 'endpoint_retired',
+      error: 'Legacy optimization has been retired. Create a job version and use its review endpoint.' });
   });
   router.use('/:profileId/versions', versionRouter);
   router.put('/:profileId', async (req, res) => {

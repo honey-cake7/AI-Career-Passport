@@ -1,0 +1,103 @@
+name: Development checks
+
+on:
+  push:
+    branches: [feat/career-passport-v2]
+  pull_request:
+    branches: [main, feat/career-passport-v2]
+
+# PR code never receives a write token, production secrets or deployment access.
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-safety:
+    name: Source safety
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Check tracked files for credential patterns
+        run: node scripts/check-secrets.mjs
+      - name: Check committed whitespace
+        run: git -c core.safecrlf=false show --format= --check HEAD
+
+  backend:
+    name: Backend contracts and persistence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      NODE_ENV: test
+      # The test preload also overrides credentials. All MongoDB instances are
+      # created by MongoMemoryServer; this URI is deliberately unusable.
+      MONGODB_URI: mongodb://127.0.0.1:1/not-used-by-tests
+      GROQ_API_KEY: test-not-a-real-key
+      QDRANT_URL: http://127.0.0.1:1
+      QDRANT_API_KEY: ''
+      MONGOMS_VERSION: 8.2.6
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm run typecheck:tests
+      - run: npm test
+      - run: npm run test:integration
+
+  frontend:
+    name: Frontend and browser workflows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      # No production frontend .env or backend is used. Playwright intercepts
+      # API requests with synthetic fixtures and asserts the test session token.
+      VITE_API_BASE_URL: http://127.0.0.1:3001
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint -- --deny-warnings
+      - run: npm run typecheck:tests
+      - run: npm run build
+      - name: Install Chromium and OS dependencies
+        run: npx --no-install playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Keep synthetic browser reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-results
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
