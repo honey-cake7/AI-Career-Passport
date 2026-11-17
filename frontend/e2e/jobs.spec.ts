@@ -71,7 +71,13 @@ async function setup(page: Page) {
     }
     if (path === `${root}/${versionId}`) {
       if (req.method() === 'DELETE') { version = null; return route.fulfill({ status: 204 }); }
-      if (req.method() === 'PUT') { const body = req.postDataJSON(); expect(body.revision).toBe(version!.revision); version = { ...version!, ...body.content, revision: version!.revision + 1, analysis: null }; }
+      if (req.method() === 'PUT') {
+        const body = req.postDataJSON(); expect(body.revision).toBe(version!.revision);
+        const reviewed = !!version!.analysis;
+        const updated: JobVersion = { ...version!, ...body.content, revision: version!.revision + 1, analysis: null };
+        if (reviewed) updated.analysis = analysis(updated);
+        version = updated;
+      }
       return response(version);
     }
     throw new Error(`Unexpected request: ${req.method()} ${path}`);
@@ -110,8 +116,9 @@ test('JD review, gap actions, reject/edit/accept, saved version export, reopen a
   expect(api.base.projects[0]!.description).toBe(original);
   await page.getByRole('button', { name: 'Save changes', exact: true }).first().click();
   await expect(page.getByText('All changes saved', { exact: true })).toBeVisible();
-  expect(api.version()?.projects[0]!.description).toBe(edited); expect(api.version()?.analysis).toBeNull();
-  await page.getByRole('button', { name: 'Review this job', exact: true }).click();
+  expect(api.version()?.projects[0]!.description).toBe(edited); expect(api.version()?.analysis?.revision).toBe(1);
+  await expect(page.getByRole('button', { name: 'Review is up to date', exact: true })).toBeDisabled();
+  expect(api.calls()).toBe(1);
   await expect(page.getByText('No safe line-reordering suggestions found.', { exact: false })).toBeVisible();
   await page.screenshot({ path: `test-results/job-review-${info.project.name}.png`, fullPage: true });
   await page.getByRole('button', { name: 'Preview saved PDF', exact: true }).click();

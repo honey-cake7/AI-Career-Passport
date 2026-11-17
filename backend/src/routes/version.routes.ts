@@ -5,9 +5,11 @@ import { inputObject, inputText, parseResumeContent, parseResumeSave, ResumeInpu
 import { rateLimit } from '../security/rateLimit.js';
 import type { JobReview } from '../services/jobReview.js';
 import { JobReviewError } from '../services/jobReviewError.js';
-import { fitsVersionBudget, plansCounter, parseRevision as revision, versionOwner as owner, versionProjection as projection } from './versionSupport.js';
+import { analysisCounter, fitsVersionBudget, plansCounter, parseRevision as revision, versionOwner as owner, versionProjection as projection, versionData } from './versionSupport.js';
 import { createGapPlanRouter } from './gapPlan.routes.js';
 import { applySkillReviews, normalizationProvider, withSkillReview } from '../services/skillReview.js';
+import { reassessReview, withCoverage } from '../services/jobCoverage.js';
+import { createRequirementsRouter } from './requirements.routes.js';
 
 const defaults = {
   review: async (...args: Parameters<typeof import('../services/jobReviewProvider.js').reviewJob>) => {
@@ -15,12 +17,7 @@ const defaults = {
     return (await import('../services/jobReviewProvider.js')).reviewJob(...args);
   },
 };
-export function versionData(version: IResumeVersion) {
-  return { profileId: version._id, revision: version.revision, ...version.content,
-    label: version.label, jobDescription: version.jobDescription, baseRevision: version.baseRevision,
-    createdAt: version.createdAt, skillNormalization: version.skillNormalization,
-    analysis: version.analysis ?? null, gapPlans: version.gapPlans ?? [], plansRevision: version.plansRevision ?? 0 };
-}
+export { versionData } from './versionSupport.js';
 function baseContent(profile: IProfile) {
   const plain = profile.toObject();
   return parseResumeContent({ personalInfo: plain.personalInfo, experiences: plain.experiences,
@@ -65,14 +62,16 @@ export function createVersionRouter(deps = defaults, normalize = normalizationPr
   });
   router.get('/:versionId', (_req, res) => { res.json({ success: true, data: versionData(res.locals.version) }); });
   router.use('/:versionId/plans', createGapPlanRouter());
+  router.use('/:versionId/requirements', createRequirementsRouter());
   router.put('/:versionId', async (req, res) => {
     const input = parseResumeSave(req.body);
     const v: IResumeVersion = res.locals.version;
     if (v.revision !== input.revision) { res.status(409).json({ success: false, error: 'This job version changed. Your edits are still here; reload the saved version.' }); return; }
     const skillNormalization = applySkillReviews(v.skillNormalization, input.skillReviews, input.content.skills);
-    if (!fitsVersionBudget(input.content, v.jobDescription, undefined, v.gapPlans, skillNormalization)) throw new ResumeInputError('This job version is too large. Shorten the resume content or plan notes.');
-    const profile = await Profile.findOneAndUpdate({ ...owner(res), versions: { $elemMatch: { _id: v._id, revision: input.revision, ...plansCounter(v.plansRevision) } } },
-      { $set: { 'versions.$.content': input.content, ...(skillNormalization ? { 'versions.$.skillNormalization': skillNormalization } : {}) }, $inc: { 'versions.$.revision': 1 }, $unset: { 'versions.$.analysis': 1 } },
+    const analysis = v.analysis ? reassessReview(v.analysis, v.analysis.requirements, input.content, input.revision + 1) : undefined;
+    if (!fitsVersionBudget(input.content, v.jobDescription, analysis, v.gapPlans, skillNormalization)) throw new ResumeInputError('This job version is too large. Shorten the resume content or plan notes.');
+    const profile = await Profile.findOneAndUpdate({ ...owner(res), versions: { $elemMatch: { _id: v._id, revision: input.revision, ...plansCounter(v.plansRevision), ...analysisCounter(v.analysis) } } },
+      { $set: { 'versions.$.content': input.content, ...(analysis ? { 'versions.$.analysis': analysis } : {}), ...(skillNormalization ? { 'versions.$.skillNormalization': skillNormalization } : {}) }, $inc: { 'versions.$.revision': 1 } },
       { returnDocument: 'after', runValidators: true, projection: projection(v._id) });
     if (!profile?.versions?.[0]) { res.status(409).json({ success: false, error: 'This job version changed. Your edits are still here; reload the saved version.' }); return; }
     res.json({ success: true, data: versionData(profile.toObject().versions![0]!) });
@@ -84,9 +83,10 @@ export function createVersionRouter(deps = defaults, normalize = normalizationPr
     if (v.revision !== expected) { res.status(409).json({ success: false, error: 'This job version changed. Reload before reviewing skills.' }); return; }
     const result = await withSkillReview(res.locals.userId, async () => {
       const skillNormalization = await normalize(v.content.skills);
-      if (!fitsVersionBudget(v.content, v.jobDescription, undefined, v.gapPlans, skillNormalization)) throw new ResumeInputError('This job version is too large to save skill suggestions.');
-      return { profile: await Profile.findOneAndUpdate({ ...owner(res), versions: { $elemMatch: { _id: v._id, revision: expected, ...plansCounter(v.plansRevision) } } },
-        { $set: { 'versions.$.skillNormalization': skillNormalization }, $inc: { 'versions.$.revision': 1 }, $unset: { 'versions.$.analysis': 1 } },
+      const analysis = v.analysis ? reassessReview(v.analysis, v.analysis.requirements, v.content, expected + 1) : undefined;
+      if (!fitsVersionBudget(v.content, v.jobDescription, analysis, v.gapPlans, skillNormalization)) throw new ResumeInputError('This job version is too large to save skill suggestions.');
+      return { profile: await Profile.findOneAndUpdate({ ...owner(res), versions: { $elemMatch: { _id: v._id, revision: expected, ...plansCounter(v.plansRevision), ...analysisCounter(v.analysis) } } },
+        { $set: { 'versions.$.skillNormalization': skillNormalization, ...(analysis ? { 'versions.$.analysis': analysis } : {}) }, $inc: { 'versions.$.revision': 1 } },
         { returnDocument: 'after', runValidators: true, projection: projection(v._id) }) };
     });
     if (!result) { res.status(429).json({ success: false, error: 'A skill review is already running. Wait for it to finish.' }); return; }
@@ -98,14 +98,14 @@ export function createVersionRouter(deps = defaults, normalize = normalizationPr
     const expected = revision(body.revision);
     const v: IResumeVersion = res.locals.version;
     if (v.revision !== expected) { res.status(409).json({ success: false, error: 'This job version changed. Reload before reviewing.' }); return; }
-    if (v.analysis?.revision === expected && v.analysis.schemaVersion === 1) { res.json({ success: true, data: v.analysis }); return; }
+    if (v.analysis?.revision === expected && v.analysis.schemaVersion === 1) { res.json({ success: true, data: withCoverage(v.analysis) }); return; }
     const userId: string = res.locals.userId;
     if (reviewing.has(userId)) { res.status(429).json({ success: false, error: 'A job review is already running. Wait for it to finish.' }); return; }
     reviewing.add(userId);
     try {
-      const result: JobReview = await deps.review(v.content, v.jobDescription, expected);
+      const result: JobReview = withCoverage(await deps.review(v.content, v.jobDescription, expected));
       if (!fitsVersionBudget(v.content, v.jobDescription, result, v.gapPlans, v.skillNormalization)) throw new JobReviewError('invalid_output');
-      const saved = await Profile.updateOne({ ...owner(res), versions: { $elemMatch: { _id: v._id, revision: expected, ...plansCounter(v.plansRevision) } } },
+      const saved = await Profile.updateOne({ ...owner(res), versions: { $elemMatch: { _id: v._id, revision: expected, ...plansCounter(v.plansRevision), ...analysisCounter(v.analysis) } } },
         { $set: { 'versions.$.analysis': result } });
       if (!saved.matchedCount) { res.status(409).json({ success: false, error: 'The resume or plans changed during analysis. Discarded the stale review; reload and try again.' }); return; }
       res.json({ success: true, data: result });

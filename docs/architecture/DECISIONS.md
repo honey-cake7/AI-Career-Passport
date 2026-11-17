@@ -2,6 +2,18 @@
 
 Updated: 2026-11-17. Baseline context and evidence: [AUDIT.md](AUDIT.md). ADR-008 supersedes the preview-only behavior and upload replacement described in earlier M1 decisions; JSON body size is now 256 KiB for bounded full-document saves. ADR-011 supersedes earlier decisions to keep the legacy optimizer operational.
 
+## ADR-014 — Editable requirements and deterministic text coverage
+
+**Status:** accepted for the coverage milestone. Supersedes ADR-009/013 behavior that discarded job analysis on resume saves or skill-snapshot refresh.
+
+Keep validated job requirements in the existing embedded version analysis. Add an owner-only requirements PUT with document revision plus analysis timestamp preconditions. Quotes must occur verbatim in the saved JD; skill terms must appear as complete names. Clients may correct/add/exclude definitions, but may not supply scores, evidence, original extraction or provenance. Preserve the first extracted definition on a model row's first correction; assign new IDs server-side. Keep existing rows with explicit exclusion. Limit edited sets to 30 rows and enforce the existing combined version budget. Empty/all-excluded/entirely unassessable sets produce no percentage.
+
+Compute coverage on the server: distinct assessable skill names with work-description mentions divided by all distinct assessable skill names in that priority, rounded to a whole percent. Listed-only claims remain in the denominator but not the numerator. Context/uncertainty stays outside the percentage and is counted visibly. Declared aliases count once under their strongest active priority (required, preferred, unspecified); duplicate and excluded rows remain visible. Do not combine priorities with arbitrary weights or represent this as proficiency, ATS certification or hiring probability. The denominator describes the selected requirements and cannot establish complete JD extraction.
+
+Resume saves and skill-review refresh retain requirements and locally rebuild evidence, ordering suggestions and coverage, advancing revision without another provider call. Manual initial requirements also work without AI configuration. Provider extraction remains optional and JD-only. Reuse the original provider usage metadata; local reassessment does not invent new token usage. Existing v1 analyses receive derived coverage on reads without a bulk migration. Runtime quote validation establishes source linkage, not semantic correctness; calibrated semantic matching remains open.
+
+Guard every competing analysis/content write with revision, plan counter and analysis timestamp/missing state. This prevents a late AI result overwriting manual requirements, or metadata writes bypassing the size budget. Plans keep their frozen requirement and assessment even after corrections/exclusions; new plans cannot target excluded or duplicate rows. Requirements/plan drafts participate in navigation protection; explicit reload replaces the complete saved editor even if only review/plan metadata changed at the same resume revision. No new service, collection, framework or production dependency is needed.
+
 ## ADR-013 — Reviewable skill names with lossless fallback
 
 **Status:** accepted for the skill-review milestone. This supersedes earlier normalization behavior that discarded unmatched names or failed an otherwise valid import when optional suggestions failed.

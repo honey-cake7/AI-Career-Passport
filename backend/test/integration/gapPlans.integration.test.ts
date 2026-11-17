@@ -109,7 +109,7 @@ test('resume changes retain plans; local reassessment changes evidence without c
   const changed = { ...content, projects: [{ ...content.projects[0]!, description: 'Packaged this demo with Docker and tested startup.' }] };
   assert.equal((await request(version(), 'PUT', owner, { revision: 0, content: changed })).status, 200);
   const loaded = await readData<Version>(await request(version(), 'GET', owner));
-  assert.equal(loaded.analysis, null); assert.equal(loaded.gapPlans[0]!.assessment.revision, 0); assert.equal(loaded.revision, 1);
+  assert.ok(loaded.analysis); assert.equal(loaded.gapPlans[0]!.assessment.revision, 0); assert.equal(loaded.revision, 1);
   assert.equal((await request(`${plans()}/${current.gapPlans[0]!.id}/reassess`, 'POST', owner, body())).status, 409);
   current = loaded;
   await successful(`${plans()}/${current.gapPlans[0]!.id}/reassess`, 'POST', body());
@@ -119,6 +119,7 @@ test('resume changes retain plans; local reassessment changes evidence without c
   assert.equal(current.gapPlans[0]!.assessment.status, 'work_mention');
 });
 test('a plan mutation during an AI review prevents stale analysis from being attached', async () => {
+  await Profile.updateOne({ _id: profileId, 'versions._id': versionId }, { $unset: { 'versions.$.analysis': 1 } });
   let entered!: () => void; let release!: () => void;
   const started = new Promise<void>(resolve => { entered = resolve; });
   gate = { entered, wait: new Promise<void>(resolve => { release = resolve; }) };

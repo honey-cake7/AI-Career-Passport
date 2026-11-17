@@ -2,6 +2,7 @@ import { Router, type Response } from 'express';
 import { Profile, type IResumeVersion } from '../models/Profile.js';
 import { inputObject, ResumeInputError } from '../validation/resume.js';
 import { createGapPlan, editGapPlan, assessPlan, requirementKey, type GapPlan } from '../services/gapPlans.js';
+import { coverageFor } from '../services/jobCoverage.js';
 import { fitsVersionBudget, parseRevision, plansCounter, versionOwner, versionProjection } from './versionSupport.js';
 
 export function createGapPlanRouter() {
@@ -41,6 +42,7 @@ export function createGapPlanRouter() {
     if (!v.analysis || v.analysis.revision !== v.revision) { res.status(409).json({ success: false, error: 'Review the current saved resume before choosing a requirement to plan.' }); return; }
     const requirement = v.analysis.requirements.find(r => r.id === body.requirementId);
     if (!requirement) throw new ResumeInputError('Choose a requirement from the current review.');
+    if (requirement.excluded || coverageFor(v.analysis.requirements).duplicates.some(r => r.id === requirement.id)) throw new ResumeInputError('Choose an included requirement that is counted separately.');
     const plans = v.gapPlans ?? [];
     if (plans.length >= 20) throw new ResumeInputError('A job version can have at most 20 plans.');
     if (plans.some(p => p.requirementKey === requirementKey(requirement))) { res.status(409).json({ success: false, error: 'A plan for this requirement already exists. Open that plan instead.' }); return; }

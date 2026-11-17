@@ -128,7 +128,7 @@ test('forged provenance and invalid decisions cannot mutate a saved review', asy
   assert.deepEqual(await Profile.findById(id).lean(), before);
 });
 
-test('job copies retain provenance independently, enforce ownership, and invalidate old job analysis', async () => {
+test('job copies retain provenance independently, enforce ownership, and reassess job analysis locally', async () => {
   const root = path() + '/versions';
   const created = await request(root, 'POST', a, { revision: 2, label: 'Synthetic role', jobDescription: 'React required.' });
   assert.equal(created.status, 201);
@@ -145,7 +145,7 @@ test('job copies retain provenance independently, enforce ownership, and invalid
   const normalized = await request(vpath + '/skills/normalize', 'POST', a, { revision: 1 });
   assert.equal(normalized.status, 200);
   const latest = await readData<Saved>(normalized);
-  assert.equal(latest.revision, 2); assert.equal(latest.analysis, null);
+  assert.equal(latest.revision, 2); assert.ok(latest.analysis);
   assert.equal(latest.skillNormalization?.entries[0]?.choice, 'pending');
   assert.equal((await current()).skillNormalization?.entries[0]?.choice, 'suggested');
   const saved = await request(vpath, 'PUT', a, { revision: 2, content: { ...content, skills: ['React.js', ...content.skills.slice(1)] }, skillReviews: [{ id: 'skill:0', choice: 'suggested' }] });

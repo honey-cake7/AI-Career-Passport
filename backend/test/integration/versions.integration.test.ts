@@ -126,8 +126,13 @@ test('verified reviews persist and repeat requests use the saved revision cache'
   assert.equal(loaded.projects[0]!.description, content.projects[0]!.description); // No automatic proposal application.
 });
 
-test('saving invalidates review; concurrent AI work is refused and stale results cannot be saved', async () => {
+test('saving reassesses locally; uncached concurrent AI work is refused and stale results cannot be saved', async () => {
   assert.equal((await request(path(), 'PUT', a, { revision: 1, content })).status, 200);
+  const current = await readData<VersionData>(await request(path(), 'GET', a));
+  assert.equal(current.analysis?.revision, 2); assert.equal(calls, 1);
+  assert.equal((await request(path() + '/review', 'POST', a, { revision: 2 })).status, 200); assert.equal(calls, 1);
+  // Exercise a first/uncached review independently of the local reassessment cache.
+  await Profile.updateOne({ _id: profileId, 'versions._id': versionId }, { $unset: { 'versions.$.analysis': 1 } });
   let entered!: () => void; let release!: () => void;
   const started = new Promise<void>(resolve => { entered = resolve; });
   gate = { entered, wait: new Promise<void>(resolve => { release = resolve; }) };
@@ -158,6 +163,7 @@ test('invalid AI output leaves no partial review and a later request can recover
 
 test('unconfigured AI returns a safe actionable error without preventing manual editing', async () => {
   assert.equal((await request(path(), 'PUT', a, { revision: 3, content })).status, 200);
+  await Profile.updateOne({ _id: profileId, 'versions._id': versionId }, { $unset: { 'versions.$.analysis': 1 } });
   const previous = process.env.GROQ_API_KEY;
   delete process.env.GROQ_API_KEY;
   const standalone = createApp().listen(0, '127.0.0.1');

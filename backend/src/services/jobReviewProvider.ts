@@ -1,7 +1,9 @@
 import { groqClient, GROQ_MODEL } from '../config/groq.js';
 import { APIConnectionTimeoutError } from 'groq-sdk';
 import type { ResumeContent } from '../validation/resume.js';
-import { parseJobReviewOutput, resumeSources, type JobReview } from './jobReview.js';
+import { parseJobReviewOutput, type JobReview } from './jobReview.js';
+import { focusSuggestions, withCoverage } from './jobCoverage.js';
+export { focusSuggestions } from './jobCoverage.js';
 
 import { JobReviewError } from './jobReviewError.js';
 
@@ -32,30 +34,12 @@ Use skill only for an explicitly named technology or tool; use context for years
     parsed.suggestions = focusSuggestions(content, parsed.requirements);
     const usage = response.usage;
     console.log(`job_review_complete duration_ms=${Date.now() - started} requirements=${parsed.requirements.length} input_tokens=${usage?.prompt_tokens ?? 'unknown'} output_tokens=${usage?.completion_tokens ?? 'unknown'}`);
-    return { ...parsed, schemaVersion: 1, revision, generatedAt: new Date().toISOString(),
-      usage: { model: GROQ_MODEL, inputTokens: usage?.prompt_tokens ?? null, outputTokens: usage?.completion_tokens ?? null } };
+    return withCoverage({ ...parsed, schemaVersion: 1, revision, generatedAt: new Date().toISOString(),
+      usage: { model: GROQ_MODEL, inputTokens: usage?.prompt_tokens ?? null, outputTokens: usage?.completion_tokens ?? null } });
   } catch (error) {
     const e = error as { status?: number; name?: string };
     const safe = error instanceof JobReviewError ? error : new JobReviewError(e.status === 401 || e.status === 403 ? 'authentication' : e.status === 404 ? 'model_unavailable' : e.status === 429 ? 'rate_limited' : error instanceof APIConnectionTimeoutError ? 'timeout' : 'unavailable');
     console.warn(`job_review_failed code=${safe.code} duration_ms=${Date.now() - started}`);
     throw safe;
   }
-}
-
-export function focusSuggestions(content: ResumeContent, requirements: JobReview['requirements']): JobReview['suggestions'] {
-  const suggestions: JobReview['suggestions'] = [];
-  for (const source of resumeSources(content)) {
-    const lines = source.text.split('\n').map(x => x.trim()).filter(Boolean);
-    if (lines.length < 2) continue;
-    const relevant = requirements.filter(r => r.kind === 'skill' && r.status === 'work_mention');
-    const ranked = lines.map((line, index) => ({ line, index, matches: relevant.filter(r => r.evidence.some(e => e.id === source.id && e.text.split('\n').some(x => x.trim() === line))) }));
-    ranked.sort((a, b) => b.matches.length - a.matches.length || a.index - b.index);
-    if (!ranked[0]?.matches.length || ranked.every((x, i) => x.index === i)) continue;
-    const proposed = ranked.map(x => x.line).join('\n');
-    // Keep all lines, including context: this initial factual edit is ordering only.
-    suggestions.push({ id: `suggestion:${suggestions.length}`, sourceId: source.id, sourceLabel: source.label, original: source.text, proposed,
-      reason: `Bring the existing line mentioning “${ranked[0].matches[0]!.label}” first. All original lines are retained; check that their order still makes sense.` });
-    if (suggestions.length === 5) break;
-  }
-  return suggestions;
 }

@@ -60,11 +60,22 @@ export interface JobReview {
   requirements: {
     id: string; label: string; quote: string; kind: 'skill' | 'context'; term: string;
     priority: 'required' | 'preferred' | 'unspecified';
+    origin?: 'model' | 'user'; excluded?: boolean;
+    original?: { id: string; label: string; quote: string; kind: 'skill' | 'context'; term: string; priority: 'required' | 'preferred' | 'unspecified' };
     status: 'work_mention' | 'claim_only' | 'not_found' | 'unassessed';
     evidence: { id: string; label: string; text: string }[]; action: string;
   }[];
   suggestions: EditSuggestion[];
   usage: { model: string; inputTokens: number | null; outputTokens: number | null };
+  coverage?: JobCoverage;
+}
+export interface JobCoverage {
+  schemaVersion: 1;
+  groups: Record<'required' | 'preferred' | 'unspecified', {
+    assessed: number; workMentions: number; listedOnly: number; notFound: number;
+    unassessed: number; excluded: number; duplicates: number; workPercent: number | null;
+  }>;
+  duplicates: { id: string; countedAs: string }[];
 }
 export interface JobVersion extends IProfile {
   label: string; jobDescription: string; baseRevision: number; createdAt: string; analysis: JobReview | null;

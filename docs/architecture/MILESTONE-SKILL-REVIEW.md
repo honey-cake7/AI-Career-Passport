@@ -1,5 +1,7 @@
 # Reviewable skill normalization
 
+Subsequent behavior: the [coverage milestone](MILESTONE-COVERAGE.md) retains and locally reassesses job requirements on resume saves/skill refresh, superseding the analysis invalidation described below. The original verification remains a historical record.
+
 Date: 2026-11-17. Development branch: `feat/career-passport-v2`. AI-assisted implementation; owner review and understanding remain part of maintaining this project.
 
 ## Problem and scope

@@ -143,6 +143,22 @@ select { display: block; width: 100%; margin: 8px 0 16px; padding: .7rem; border
 .skill-review-row .actions { flex-wrap: wrap; margin: 12px 0; }
 .skill-review-row details { margin-top: 14px; }
 .skill-review-row details > button { margin-top: 12px; }
+.coverage-panel { margin: 24px 0; padding-top: 20px; border-top: 1px solid #cdd5c6; }
+.coverage-panel > p { margin: 12px 0; }
+.coverage-group { padding: 18px; margin: 16px 0; border: 1px solid #c9d3c3; background: #f2f5ec; border-radius: 4px; }
+.coverage-group h4, .requirement-edit h4 { margin: 0; font-size: .9rem; }
+.coverage-value { font-size: 1.65rem; color: #244d3f; margin: 8px 0; font-weight: 600; }
+.coverage-group > p:not(.coverage-value) { font-size: .85rem; }
+.coverage-group dl { margin: 14px 0 0; font-size: .75rem; }
+.coverage-group dl > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; margin-top: 8px; }
+.coverage-group dd { margin: 0; font-weight: 600; }
+.requirements-editor { border-top: 1px solid #cdd5c6; border-bottom: 1px solid #cdd5c6; padding: 18px 0; }
+.requirements-editor > p { margin: 14px 0; font-size: .85rem; }
+.requirement-edit { padding: 18px; margin: 18px 0; border: 1px solid #c9d3c3; background: #fffefa; border-radius: 4px; }
+.requirement-edit label { margin-top: 16px; }
+.requirement-edit textarea { min-height: 80px; }
+.requirements-editor form > fieldset > .hint { margin-top: 16px; }
+.requirements-editor .actions { margin-top: 18px; }
 @media (min-width: 951px) { .document-aside:has(.job-review) { position: static; } }
 @media (max-width: 950px) { .document-aside:has(.job-review) { order: -1; } }
 @media (max-width: 650px) { .job-start-grid { grid-template-columns: minmax(0, 1fr); } .job-create, .version-list, .job-review { padding: 20px; } .version-context { flex-wrap: wrap; } }

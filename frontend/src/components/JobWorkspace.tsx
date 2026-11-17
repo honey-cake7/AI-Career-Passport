@@ -9,6 +9,7 @@ export function JobWorkspace({ base, onDirty }: { base: IProfile; onDirty: (valu
   const root = `/api/profile/${base.profileId}/versions`;
   const [versions, setVersions] = useState<VersionListItem[]>([]);
   const [selected, setSelected] = useState<JobVersion | null>(null);
+  const [editorEpoch, setEditorEpoch] = useState(0);
   const [label, setLabel] = useState('');
   const [jobDescription, setJobDescription] = useState('');
   const [busy, setBusy] = useState(false);
@@ -48,7 +49,7 @@ export function JobWorkspace({ base, onDirty }: { base: IProfile; onDirty: (valu
   if (selected) {
     const path = `${root}/${selected.profileId}`;
     return <><div className="version-context"><button onClick={() => { if (!dirty || window.confirm('Discard unsaved edits and return to job versions?')) { setSelected(null); reportDirty(false); } }}>← All job versions</button><div><strong>{selected.label}</strong><p className="hint">Independent copy of base revision {selected.baseRevision}. Editing this version keeps your base resume intact.</p></div></div>
-      <ResumeEditor key={selected.profileId} profile={selected} documentLabel={selected.label} resourcePath={path} onDirty={reportDirty} onSaved={saved => { const v = saved as JobVersion; setSelected(v); setVersions(list => list.map(x => x.profileId === v.profileId ? v : x)); }} onDeleted={() => { setVersions(list => list.filter(x => x.profileId !== selected.profileId)); setSelected(null); reportDirty(false); }} reviewPanel={controls => <JobReviewPanel key={`${selected.profileId}:${selected.revision}`} version={selected} path={path} {...controls} />} />
+      <ResumeEditor key={`${selected.profileId}:${editorEpoch}`} profile={selected} documentLabel={selected.label} resourcePath={path} onDirty={reportDirty} onSaved={saved => { const v = saved as JobVersion; setSelected(v); setVersions(list => list.map(x => x.profileId === v.profileId ? v : x)); }} onDeleted={() => { setVersions(list => list.filter(x => x.profileId !== selected.profileId)); setSelected(null); reportDirty(false); }} reviewPanel={controls => <JobReviewPanel key={`${selected.profileId}:${selected.revision}`} version={selected} path={path} {...controls} onRequirementsSaved={v => { setSelected(v); setEditorEpoch(x => x + 1); setVersions(list => list.map(x => x.profileId === v.profileId ? v : x)); }} />} />
     </>;
   }
   return <section className="job-workspace"><div className="workspace-heading"><div><p className="eyebrow">TAILOR WITH CONTEXT</p><h1>One resume. A specific opportunity.</h1><p>Start a separate version, compare the requirements, and decide what to change.</p></div></div>

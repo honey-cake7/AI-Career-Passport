@@ -27,14 +27,16 @@ function Field({ title, value, onChange, multiline = false, required = false, ma
 export function ResumeEditor({ profile, onSaved, onDeleted, onDirty, resourcePath, documentLabel = 'Base resume', reviewPanel }: {
   profile: IProfile; onSaved: (profile: IProfile) => void; onDeleted: () => void; onDirty: (dirty: boolean) => void;
   resourcePath?: string; documentLabel?: string;
-  reviewPanel?: (controls: { dirty: boolean; busy: boolean; apply: (suggestion: EditSuggestion) => boolean; onPlanDirty: (value: boolean) => void; focusEvidence: () => void }) => ReactNode;
+  reviewPanel?: (controls: { dirty: boolean; busy: boolean; apply: (suggestion: EditSuggestion) => boolean; onPlanDirty: (value: boolean) => void; onReviewBusy: (value: boolean) => void; focusEvidence: () => void }) => ReactNode;
 }) {
   const path = resourcePath ?? `/api/profile/${profile.profileId}`;
   const [draft, setDraft] = useState(() => content(profile));
   // Keep separators while typing instead of reparsing the field on every keystroke.
   const [skills, setSkills] = useState(profile.skills.join('\n'));
   const [skillEntries, setSkillEntries] = useState<SkillEntry[]>(() => structuredClone(profile.skillNormalization?.entries ?? []));
-  const [busy, setBusy] = useState(false);
+  const [requestBusy, setBusy] = useState(false);
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const busy = requestBusy || reviewBusy;
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [pdf, setPdf] = useState('');
@@ -62,7 +64,7 @@ export function ResumeEditor({ profile, onSaved, onDeleted, onDirty, resourcePat
   }
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (planDirty && !window.confirm('Save the resume and discard unsaved plan edits? Save your plan first to keep those notes.')) return;
+    if (planDirty && !window.confirm('Save the resume and discard unsaved job review edits? Save requirements and plans first to keep them.')) return;
     setBusy(true); setError(''); setNotice('');
     try {
       const clean = { ...draft, skills: parseSkills(skills),
@@ -120,7 +122,7 @@ export function ResumeEditor({ profile, onSaved, onDeleted, onDirty, resourcePat
     } finally { if (mounted.current) setBusy(false); }
   }
   async function reload() {
-    if ((dirty || planDirty) && !window.confirm('Discard your unsaved resume and plan edits and load the latest saved resume?')) return;
+    if ((dirty || planDirty) && !window.confirm('Discard your unsaved resume and job review edits and load the latest saved resume?')) return;
     setBusy(true); setError('');
     try {
       const response = await apiClient.get(resourcePath ?? '/api/profile/me');
@@ -163,10 +165,10 @@ export function ResumeEditor({ profile, onSaved, onDeleted, onDirty, resourcePat
   }
 
   return <>
-    <div className="workspace-heading"><div><p className="eyebrow">YOUR WORKSPACE</p><h1>A resume that sounds like you.</h1><p>Edit the details. Keep the facts. Save a document you can stand behind.</p></div><span className="save-state" role="status">{dirty ? 'Unsaved changes' : 'All changes saved'}</span></div>
+    <div className="workspace-heading"><div><p className="eyebrow">YOUR WORKSPACE</p><h1>A resume that sounds like you.</h1><p>Edit the details. Keep the facts. Save a document you can stand behind.</p></div><span className="save-state" role="status">{dirty ? 'Unsaved changes' : planDirty ? 'Unsaved job review edits' : 'All changes saved'}</span></div>
     <div className="editor-layout">
       <form onSubmit={save} className="editor-form" ref={editorForm}>
-        <div className="document-toolbar"><strong>{documentLabel}</strong><div className="actions"><button type="button" disabled={busy || !dirty} onClick={() => { if (window.confirm('Discard your unsaved resume changes? Plan edits will be kept.')) { reset(profile, false); setError(''); setNotice(''); } }}>Discard edits</button><button className="primary" disabled={busy || !dirty || conflict}>{busy ? 'Working…' : 'Save changes'}</button></div></div>
+        <div className="document-toolbar"><strong>{documentLabel}</strong><div className="actions"><button type="button" disabled={busy || !dirty} onClick={() => { if (window.confirm('Discard your unsaved resume changes? Job review edits will be kept.')) { reset(profile, false); setError(''); setNotice(''); } }}>Discard edits</button><button className="primary" disabled={busy || !dirty || conflict}>{busy ? 'Working…' : 'Save changes'}</button></div></div>
         {error && <p className="error" role="alert" tabIndex={-1} ref={errorMessage}>{error}</p>}
         {conflict && <button type="button" disabled={busy} onClick={() => void reload()}>Reload saved resume</button>}
         {notice && <p className="notice" role="status">{notice}</p>}
@@ -200,7 +202,7 @@ export function ResumeEditor({ profile, onSaved, onDeleted, onDirty, resourcePat
         </fieldset>
         <div className="document-toolbar"><p className="hint">* Required fields. Save before previewing or downloading.</p><button className="primary" disabled={busy || !dirty || conflict}>Save changes</button></div>
       </form>
-      <aside className="document-aside"><Fragment key={panelEpoch}>{reviewPanel?.({ dirty, busy, apply, onPlanDirty: setPlanDirty, focusEvidence: () => {
+      <aside className="document-aside"><Fragment key={panelEpoch}>{reviewPanel?.({ dirty, busy: requestBusy, apply, onPlanDirty: setPlanDirty, onReviewBusy: setReviewBusy, focusEvidence: () => {
         const target = editorForm.current?.querySelector<HTMLElement>('[data-source-id^="project:"], [data-add-project]');
         target?.scrollIntoView({ block: 'center' }); target?.focus({ preventScroll: true });
       } })}</Fragment><div className="preview-card"><p className="eyebrow">THE DOCUMENT</p><h2>Ready when you are.</h2><p>Your PDF is generated from the saved resume, using a clean A4 layout.</p><button className="primary" disabled={busy || dirty} onClick={() => void preview()}>{pdf && !dirty ? 'Refresh PDF preview' : 'Preview saved PDF'}</button>

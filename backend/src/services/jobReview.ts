@@ -3,9 +3,12 @@ import { inputObject, inputText } from '../validation/resume.js';
 
 export type EvidenceStatus = 'work_mention' | 'claim_only' | 'not_found' | 'unassessed';
 export interface ResumeSource { id: string; label: string; text: string }
-export interface Requirement {
+export interface RequirementDefinition {
   id: string; label: string; quote: string; kind: 'skill' | 'context'; term: string;
   priority: 'required' | 'preferred' | 'unspecified';
+}
+export interface Requirement extends RequirementDefinition {
+  origin?: 'model' | 'user'; original?: RequirementDefinition; excluded?: boolean;
 }
 export interface ReviewedRequirement extends Requirement {
   status: EvidenceStatus; evidence: ResumeSource[]; action: string;
@@ -15,6 +18,7 @@ export interface JobReview {
   schemaVersion: 1; revision: number; generatedAt: string;
   requirements: ReviewedRequirement[]; suggestions: EditSuggestion[];
   usage: { model: string; inputTokens: number | null; outputTokens: number | null };
+  coverage?: import('./jobCoverage.js').JobCoverage;
 }
 
 export function resumeSources(content: ResumeContent): ResumeSource[] {
@@ -27,6 +31,10 @@ export function resumeSources(content: ResumeContent): ResumeSource[] {
 
 const aliases = [ ['react', 'react.js', 'reactjs'], ['node.js', 'nodejs'], ['typescript', 'ts'],
   ['javascript', 'js'], ['postgresql', 'postgres'], ['scikit-learn', 'sklearn'], ['pytorch', 'torch'] ];
+export function skillIdentity(term: string): string {
+  const key = term.trim().toLowerCase();
+  return aliases.find(group => group.includes(key))?.[0] ?? key;
+}
 function mentions(text: string, term: string): boolean {
   const names = aliases.find(group => group.includes(term.toLowerCase())) ?? [term.toLowerCase()];
   return names.some(name => {
@@ -48,6 +56,7 @@ export function compareRequirements(requirements: Requirement[], content: Resume
   const sources = resumeSources(content).filter(x => x.id !== 'summary');
   const claims = [...content.skills, content.personalInfo.summary ?? '', ...content.projects.flatMap(x => x.techStack)].join('\n');
   return requirements.map(requirement => {
+    if (requirement.excluded) return { ...requirement, status: 'unassessed', evidence: [], action: 'Excluded from this comparison. Include it again if it applies.' };
     const matches = requirement.kind === 'skill' ? sources.filter(x => mentions(x.text, requirement.term)).map(x => {
       const lines = x.text.split('\n').filter(line => mentions(line, requirement.term));
       return { ...x, text: lines.join('\n').slice(0, 1200) };
@@ -63,25 +72,28 @@ export function compareRequirements(requirements: Requirement[], content: Resume
   });
 }
 
+export function parseRequirement(value: unknown, jobDescription: string, id: string): RequirementDefinition {
+  const r = inputObject(value, ['label', 'quote', 'kind', 'term', 'priority'], 'Requirement');
+  const label = inputText(r.label, 'Requirement label', true, 200);
+  const quote = inputText(r.quote, 'Requirement quote', true, 1200);
+  if (!jobDescription.includes(quote)) throw new Error('The requirement quote must be copied exactly from the saved job description');
+  if (r.kind !== 'skill' && r.kind !== 'context') throw new Error('Choose skill or context for the requirement');
+  if (!['required', 'preferred', 'unspecified'].includes(String(r.priority))) throw new Error('Choose a valid requirement priority');
+  const term = inputText(r.term, 'Skill term', r.kind === 'skill', 100);
+  if (/[\r\n\t]/.test(term)) throw new Error('A skill term must be on one line');
+  if (r.kind === 'skill' && (!quote.toLowerCase().includes(term.toLowerCase()) || !mentions(quote, term))) throw new Error('The skill term must appear as a complete name in its source quote');
+  const qualified = /\b(or|either|unless|not|without|no)\b|\b\d+\s*\+?\s*(years?|months?)\b/i.test(quote);
+  const kind = qualified ? 'context' : r.kind;
+  return { id, label, quote, kind, term: kind === 'skill' ? term : '', priority: r.priority as Requirement['priority'] };
+}
+
 /** No invented names, numbers or achievements: AI may select/reorder complete
  * existing lines only. Users may edit wording manually before accepting/saving. */
 export function parseJobReviewOutput(value: unknown, jobDescription: string, content: ResumeContent) {
   const root = inputObject(value, ['requirements', 'suggestions'], 'Job review');
   if (!Array.isArray(root.requirements) || !root.requirements.length || root.requirements.length > 20) throw new Error('Invalid requirements list');
   if (!Array.isArray(root.suggestions) || root.suggestions.length > 5) throw new Error('Invalid suggestions list');
-  const requirements: Requirement[] = root.requirements.map((value, i) => {
-    const r = inputObject(value, ['label', 'quote', 'kind', 'term', 'priority'], 'Requirement');
-    const label = inputText(r.label, 'Requirement label', true, 200);
-    const quote = inputText(r.quote, 'Requirement quote', true, 1200);
-    if (!jobDescription.includes(quote)) throw new Error('Unverifiable job quote');
-    if (r.kind !== 'skill' && r.kind !== 'context') throw new Error('Invalid requirement kind');
-    if (!['required', 'preferred', 'unspecified'].includes(String(r.priority))) throw new Error('Invalid priority');
-    const term = inputText(r.term, 'Skill term', r.kind === 'skill', 100);
-    if (r.kind === 'skill' && !quote.toLowerCase().includes(term.toLowerCase())) throw new Error('Skill not present in cited requirement');
-    const qualified = /\b(or|either|unless|not|without|no)\b|\b\d+\s*\+?\s*(years?|months?)\b/i.test(quote);
-    const kind = qualified ? 'context' : r.kind;
-    return { id: `requirement:${i}`, label, quote, kind, term: kind === 'skill' ? term : '', priority: r.priority as Requirement['priority'] };
-  });
+  const requirements: Requirement[] = root.requirements.map((value, i) => parseRequirement(value, jobDescription, `requirement:${i}`));
   const sources = resumeSources(content);
   const used = new Set<string>();
   const suggestions: EditSuggestion[] = root.suggestions.map((value, i) => {

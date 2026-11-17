@@ -27,7 +27,7 @@ export function SkillReview({ snapshot, entries, skills, blocked, onReview, onCh
     <h3>Review skill names</h3><p>Check suggested wording before using it. A taxonomy match describes a name; it does not verify your experience or proficiency.</p>
     {snapshot?.status === 'unavailable' && <p role="status" className="notice">Suggestions were unavailable. All original skills were kept. You can edit them here or try again after saving.</p>}
     <button type="button" disabled={blocked || !skills.length} onClick={onReview}>{snapshot ? 'Refresh skill suggestions' : 'Review saved skill names'}</button>
-    <p className="hint">Save resume and plan edits first. This sends saved skill names to the normalization service, including the AI provider. Refreshing replaces earlier review decisions; it keeps your saved skill list.</p>
+    <p className="hint">Save resume and job review edits first. This sends saved skill names to the normalization service, including the AI provider. Refreshing replaces earlier review decisions; it keeps your saved skill list.</p>
     {snapshot && <details className="skill-review-list"><summary>{entries.length} skill names · {pending} awaiting review</summary>
       <ul>{entries.map(entry => <SkillRow key={`${snapshot.generatedAt}:${entry.id}`} entry={entry} listed={skills.includes(entry.value)} choose={(choice, value) => onChoose(entry.id, choice, value)} />)}</ul>
     </details>}
