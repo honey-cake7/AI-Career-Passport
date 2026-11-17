@@ -43,10 +43,16 @@ test('48 skills use a single embedding pass and a single Qdrant batch request', 
   assert.equal(search.mock.callCount(), 1);
 });
 
-test('an empty taxonomy fails explicitly instead of discarding every skill', async t => {
+test('an empty taxonomy returns no candidates for review instead of deleting skills', async t => {
   t.mock.method(embeddingService, 'generateEmbeddings', async () => [Array(384).fill(0.1)]);
   t.mock.method(qdrantClient, 'queryBatch', async () => [{ points: [] }]);
-  await assert.rejects(findSimilarSkillsBatch(['React']), { name: 'SkillPipelineError', stage: 'qdrant' });
+  assert.deepEqual(await findSimilarSkillsBatch(['React']), [[]]);
+});
+
+test('Qdrant responses cannot exceed the requested candidate budget', async t => {
+  t.mock.method(embeddingService, 'generateEmbeddings', async () => [Array(384).fill(0.1)]);
+  t.mock.method(qdrantClient, 'queryBatch', async () => [{ points: Array.from({ length: 4 }, (_, i) => ({ score: 0.8, payload: { skill_name: `Skill ${i}` } })) }] as any);
+  await assert.rejects(findSimilarSkillsBatch(['React'], 3), { name: 'SkillPipelineError', stage: 'qdrant' });
 });
 
 test('failed initialization can retry and concurrent calls share initialization', async t => {

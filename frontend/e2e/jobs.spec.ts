@@ -190,6 +190,7 @@ test('saved plans require an outcome, survive reopening, and reassess only saved
 test('stale plan errors preserve notes and navigation warns about unsaved plan edits', async ({ page }) => {
   const { api, plan } = await dockerPlan(page);
   await plan.getByLabel('Outcome notes').fill('Keep these unsaved notes.');
+  await expect(page.getByRole('button', { name: 'Review saved skill names' })).toBeDisabled();
   api.conflict(); await plan.getByRole('button', { name: 'Save plan', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Reload before saving');
   await expect(plan.getByLabel('Outcome notes')).toHaveValue('Keep these unsaved notes.');

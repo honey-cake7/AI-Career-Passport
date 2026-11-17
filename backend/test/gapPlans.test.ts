@@ -62,4 +62,5 @@ test('the per-version storage budget includes private plan notes and multibyte t
   const plan = createGapPlan(requirement, 'needs_practice', resume, 0);
   assert.equal(fitsVersionBudget(resume, requirement.quote, undefined, [plan]), true);
   assert.equal(fitsVersionBudget(resume, requirement.quote, undefined, [{ ...plan, notes: '測'.repeat(180000) }]), false);
+  assert.equal(fitsVersionBudget(resume, requirement.quote, undefined, [plan], { schemaVersion: 1, generatedAt: '測'.repeat(180000), status: 'ready', entries: [] }), false);
 });

@@ -4,9 +4,11 @@ import { Profile, type IProfile } from '../models/Profile.js';
 import { requireAuth } from '../security/auth.js';
 import { rateLimit } from '../security/rateLimit.js';
 import type { ExtractedProfile } from '../services/profileExtractor.service.js';
-import { parseResumeContent, parseResumeSave, ResumeInputError } from '../validation/resume.js';
+import { inputObject, parseResumeContent, parseResumeSave, ResumeInputError } from '../validation/resume.js';
 import { createVersionRouter } from './version.routes.js';
 import { withActiveAccount } from '../security/accountAccess.js';
+import { applySkillReviews, normalizationProvider, withSkillReview } from '../services/skillReview.js';
+import { parseRevision } from './versionSupport.js';
 
 // Lazy loading keeps authentication independent of AI keys and native models.
 const services = {
@@ -20,7 +22,7 @@ export function profileData(profile: IProfile) {
   return {
     profileId: profile._id, revision: profile.revision ?? 0, personalInfo: profile.personalInfo,
     experiences: profile.experiences, education: profile.education,
-    projects: profile.projects, skills: profile.skills,
+    projects: profile.projects, skills: profile.skills, skillNormalization: profile.skillNormalization,
   };
 }
 
@@ -31,7 +33,7 @@ export function profileUpdate(extracted: ExtractedProfile, skills: string[]) {
   };
 }
 
-export function createProfileRouter(deps = services, versionRouter = createVersionRouter()) {
+export function createProfileRouter(deps = services, versionRouter = createVersionRouter(), normalize = normalizationProvider) {
   const router = Router();
   // Existing slugs were published without consent. Never grant them public access.
   router.get('/public/:slug', (_req, res) => {
@@ -87,7 +89,8 @@ export function createProfileRouter(deps = services, versionRouter = createVersi
       return;
     }
     const extracted = await deps.extract(text);
-    const skills = await deps.normalize(text);
+    const skillNormalization = await deps.normalize(text);
+    const skills = skillNormalization.entries.map(entry => entry.raw);
     let content;
     try { content = parseResumeContent(profileUpdate(extracted, skills)); }
     catch (error) {
@@ -96,7 +99,7 @@ export function createProfileRouter(deps = services, versionRouter = createVersi
     }
     try {
       // A unique owner index also protects concurrent imports/manual creation.
-      const profile = await withActiveAccount(res.locals.userId, () => Profile.create({ ...content, userId: res.locals.userId }));
+      const profile = await withActiveAccount(res.locals.userId, () => Profile.create({ ...content, skillNormalization, userId: res.locals.userId }));
       res.json({ success: true, data: profileData(profile) });
     } catch (error) {
       if ((error as { code?: number }).code !== 11000) throw error;
@@ -126,6 +129,21 @@ export function createProfileRouter(deps = services, versionRouter = createVersi
       error: 'Legacy optimization has been retired. Create a job version and use its review endpoint.' });
   });
   router.use('/:profileId/versions', versionRouter);
+  router.post('/:profileId/skills/normalize', aiLimit, async (req, res) => {
+    const body = inputObject(req.body, ['revision'], 'Skill review');
+    const expected = parseRevision(body.revision);
+    const current: IProfile = res.locals.profile;
+    if ((current.revision ?? 0) !== expected) { res.status(409).json({ success: false, error: 'Your resume changed. Reload before reviewing skills.' }); return; }
+    const result = await withSkillReview(res.locals.userId, async () => {
+      const skillNormalization = await normalize(current.skills);
+      const filter = expected === 0 ? { $or: [{ revision: 0 }, { revision: { $exists: false } }] } : { revision: expected };
+      return { profile: await Profile.findOneAndUpdate({ _id: current._id, userId: res.locals.userId, ...filter },
+        { $set: { skillNormalization }, $inc: { revision: 1 } }, { returnDocument: 'after', runValidators: true }) };
+    });
+    if (!result) { res.status(429).json({ success: false, error: 'A skill review is already running. Wait for it to finish.' }); return; }
+    if (!result.profile) { res.status(409).json({ success: false, error: 'Your resume changed during skill review. Reload before trying again.' }); return; }
+    res.json({ success: true, data: profileData(result.profile) });
+  });
   router.put('/:profileId', async (req, res) => {
     let input;
     try { input = parseResumeSave(req.body); }
@@ -133,6 +151,8 @@ export function createProfileRouter(deps = services, versionRouter = createVersi
       if (!(error instanceof ResumeInputError)) throw error;
       res.status(400).json({ success: false, error: error.message }); return;
     }
+    if ((res.locals.profile.revision ?? 0) !== input.revision) { res.status(409).json({ success: false, error: 'Your resume changed. Your edits are still here; reload the saved resume.' }); return; }
+    const skillNormalization = applySkillReviews(res.locals.profile.skillNormalization, input.skillReviews, input.content.skills);
     // Atomic comparison prevents a second tab from silently erasing a newer save.
     // Older documents have no revision field and are treated as revision zero.
     const revisionFilter = input.revision === 0
@@ -140,7 +160,7 @@ export function createProfileRouter(deps = services, versionRouter = createVersi
       : { revision: input.revision };
     const profile = await Profile.findOneAndUpdate(
       { _id: req.params.profileId, userId: res.locals.userId, ...revisionFilter },
-      { $set: input.content, $inc: { revision: 1 }, $unset: { rawResumeText: 1 } },
+      { $set: { ...input.content, ...(skillNormalization ? { skillNormalization } : {}) }, $inc: { revision: 1 }, $unset: { rawResumeText: 1 } },
       { returnDocument: 'after', runValidators: true },
     );
     if (!profile) {

@@ -1,5 +1,6 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { skillSnapshot } from '../../src/services/skillReview.js';
 import type { Server } from 'node:http';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server-core';
@@ -32,7 +33,7 @@ before(async () => {
   const app = createApp(createProfileRouter({
     parse: extractTextFromPdf,
     extract: async () => extracted,
-    normalize: async () => ['TypeScript'],
+    normalize: async () => skillSnapshot(['TypeScript']),
     pdf: generateProfilePdf,
   }));
   server = app.listen(0, '127.0.0.1');

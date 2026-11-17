@@ -40,6 +40,16 @@ export interface IProfile {
   education: IEducation[];
   projects: IProject[];
   skills: string[];
+  skillNormalization?: SkillNormalization;
+}
+
+export interface SkillEntry {
+  id: string; raw: string; suggestion: string | null;
+  method: 'exact' | 'model' | 'unresolved';
+  choice: 'pending' | 'original' | 'suggested' | 'custom'; value: string;
+}
+export interface SkillNormalization {
+  schemaVersion: 1; generatedAt: string; status: 'ready' | 'unavailable'; entries: SkillEntry[];
 }
 
 export interface EditSuggestion {

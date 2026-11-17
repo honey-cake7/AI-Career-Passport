@@ -76,9 +76,10 @@ export function parseResumeContent(value: unknown): ResumeContent {
 }
 
 export function parseResumeSave(value: unknown) {
-  const body = object(value, ['content', 'revision'], 'Request');
+  const body = object(value, ['content', 'revision', 'skillReviews'], 'Request');
   if (!Number.isSafeInteger(body.revision) || (body.revision as number) < 0) throw new ResumeInputError('Revision must be a non-negative integer');
-  return { content: parseResumeContent(body.content), revision: body.revision as number };
+  return { content: parseResumeContent(body.content), revision: body.revision as number,
+    ...(body.skillReviews !== undefined ? { skillReviews: body.skillReviews } : {}) };
 }
 
 /** Providers represent absent optional strings as null; HTTP edits use strings.

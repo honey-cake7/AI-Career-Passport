@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import type { ResumeContent } from '../validation/resume.js';
 import type { JobReview } from '../services/jobReview.js';
 import type { GapPlan } from '../services/gapPlans.js';
+import type { SkillNormalization } from '../services/skillReview.js';
 
 export interface IResumeVersion {
   _id: Types.ObjectId;
@@ -11,6 +12,7 @@ export interface IResumeVersion {
   baseRevision: number;
   revision: number;
   content: ResumeContent;
+  skillNormalization?: SkillNormalization;
   analysis?: JobReview;
   gapPlans?: GapPlan[];
   plansRevision?: number;
@@ -64,6 +66,7 @@ export interface IProfile extends Document {
   education: IEducation[];
   projects: IProject[];
   skills: string[]; // User-reviewed wording; canonical matching is a separate concern.
+  skillNormalization?: SkillNormalization;
   slug: string; // Public sharing link
   rawResumeText?: string;
   createdAt: Date;
@@ -136,6 +139,7 @@ const ResumeVersionSchema = new Schema<IResumeVersion>({
   baseRevision: { type: Number, required: true },
   revision: { type: Number, default: 0 },
   content: { type: ResumeContentSchema, required: true },
+  skillNormalization: { type: Schema.Types.Mixed }, // Server-produced suggestions and validated review decisions.
   analysis: { type: Schema.Types.Mixed }, // Only server-validated JobReview values.
   gapPlans: { type: [Schema.Types.Mixed], default: [] }, // Only validated, owner-scoped plan mutations.
   plansRevision: { type: Number, default: 0, min: 0 },
@@ -145,6 +149,7 @@ const ResumeVersionSchema = new Schema<IResumeVersion>({
 const ProfileSchema = new Schema<IProfile>(
   {
     revision: { type: Number, default: 0, min: 0 },
+    skillNormalization: { type: Schema.Types.Mixed },
     versions: { type: [ResumeVersionSchema], default: [], select: false },
     userId: {
       type: Schema.Types.ObjectId,

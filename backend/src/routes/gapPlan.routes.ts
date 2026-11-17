@@ -24,7 +24,7 @@ export function createGapPlanRouter() {
   });
   async function persist(res: Response, plans: GapPlan[]) {
     const v: IResumeVersion = res.locals.version;
-    if (!fitsVersionBudget(v.content, v.jobDescription, v.analysis, plans)) throw new ResumeInputError('This version is too large. Shorten notes or remove an unused plan.');
+    if (!fitsVersionBudget(v.content, v.jobDescription, v.analysis, plans, v.skillNormalization)) throw new ResumeInputError('This version is too large. Shorten notes or remove an unused plan.');
     // A review may arrive while this request is being validated. Guard that snapshot
     // too, so concurrent metadata writes cannot bypass the combined storage budget.
     const analysis = v.analysis ? { 'analysis.generatedAt': v.analysis.generatedAt } : { analysis: { $exists: false } };

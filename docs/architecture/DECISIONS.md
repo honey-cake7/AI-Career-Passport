@@ -2,6 +2,16 @@
 
 Updated: 2026-11-17. Baseline context and evidence: [AUDIT.md](AUDIT.md). ADR-008 supersedes the preview-only behavior and upload replacement described in earlier M1 decisions; JSON body size is now 256 KiB for bounded full-document saves. ADR-011 supersedes earlier decisions to keep the legacy optimizer operational.
 
+## ADR-013 — Reviewable skill names with lossless fallback
+
+**Status:** accepted for the skill-review milestone. This supersedes earlier normalization behavior that discarded unmatched names or failed an otherwise valid import when optional suggestions failed.
+
+Keep `ResumeContent.skills` as user-controlled exportable text. Store a separate bounded, versioned `skillNormalization` snapshot on the base and each job copy: timestamp, ready/unavailable status, stable-within-snapshot entry IDs, raw strings, optional suggested names, mapping method and review decisions. Exact case-insensitive candidate names bypass the model but still require user choice. One bounded model request selects other suggestions only from retrieved candidates; null or no candidates preserves the raw string. Unknown response fields, invented names, duplicate indices and incomplete responses fail validation. A failed embedding/search/selection step discards all suggestions together and preserves the successfully extracted raw names. Raw extraction failure still prevents saving an invalid import.
+
+Use explicit keep-original/use-suggestion/custom controls and ordinary revision-checked saves. Clients send changed decisions only, never provider provenance or candidate names. The server derives offered names from its saved snapshot and requires new chosen wording in saved skills. Editing/saving/exporting makes no AI call. Existing resumes may explicitly request normalization of their saved skills; no attempt is made to reconstruct raw strings discarded by old code. Refresh replaces the snapshot but does not change the saved skills. Base/copy refresh shares per-account admission; owner predicates, rate limits, revision CAS and job-plan counters protect writes. Snapshots count toward the combined 500 KiB version budget on every mutation.
+
+**Consequences:** originals are retained in private MongoDB records until resume/version/account deletion. They are not added to exports. Review decisions describe wording choices, not verified competence, immutable approval history or extraction evidence. Manual removal may leave a historical choice absent from the list; the UI says so. Job refresh advances document revision and invalidates its previous analysis; copies remain independent. Newline-delimited editing preserves commas within skill names. No calibrated similarity threshold, confidence percentage or hiring score is introduced. Held-out labels, versioned taxonomy and live-host performance/AI quality evaluation are still required. No additional infrastructure or production dependency is needed.
+
 ## ADR-012 — Password-confirmed, resumable account deletion on one API process
 
 **Status:** accepted for M5B; multi-process deployment remains blocked pending a shared write fence.

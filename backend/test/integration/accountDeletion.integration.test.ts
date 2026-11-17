@@ -1,5 +1,6 @@
 import { after, before, mock, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { skillSnapshot } from '../../src/services/skillReview.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { Server } from 'node:http';
@@ -38,7 +39,7 @@ before(async () => {
   server = createApp(createProfileRouter({ parse: async () => 'Synthetic resume', extract: async () => {
     if (gate) { gate.entered(); await gate.wait; }
     return content;
-  }, normalize: async () => [], pdf: async () => Buffer.from('%PDF-fixture') })).listen(0, '127.0.0.1');
+  }, normalize: async () => skillSnapshot([]), pdf: async () => Buffer.from('%PDF-fixture') })).listen(0, '127.0.0.1');
   await new Promise<void>(resolve => server.once('listening', resolve));
   base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   owner = await register('deletion-owner'); other = await register('deletion-other');

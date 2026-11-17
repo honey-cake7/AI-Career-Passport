@@ -33,15 +33,15 @@ export async function findSimilarSkillsBatch(rawSkills: string[], topK = 3): Pro
       searches: vectors.map(vector => ({ query: vector, limit: topK, with_payload: true })),
       timeout: 8,
     });
-    if (results.length !== rawSkills.length || results.some(result => !result.points.length)) {
-      throw new Error('Skill taxonomy is empty or search results are incomplete');
+    if (results.length !== rawSkills.length || results.some(result => !Array.isArray(result.points) || result.points.length > topK)) {
+      throw new Error('Skill search results are incomplete');
     }
     return results.map(({ points }) => points.map(result => {
       const skill = result.payload?.skill_name;
-      if (typeof skill !== 'string' || !skill.trim() || !Number.isFinite(result.score)) {
+      if (typeof skill !== 'string' || !skill.trim() || skill.length > 100 || /[\u0000-\u001f]/.test(skill) || !Number.isFinite(result.score)) {
         throw new Error('Invalid taxonomy payload');
       }
-      return { skill, score: result.score };
+      return { skill: skill.trim(), score: result.score };
     }));
   });
 }

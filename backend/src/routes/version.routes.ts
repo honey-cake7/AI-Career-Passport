@@ -7,6 +7,7 @@ import type { JobReview } from '../services/jobReview.js';
 import { JobReviewError } from '../services/jobReviewError.js';
 import { fitsVersionBudget, plansCounter, parseRevision as revision, versionOwner as owner, versionProjection as projection } from './versionSupport.js';
 import { createGapPlanRouter } from './gapPlan.routes.js';
+import { applySkillReviews, normalizationProvider, withSkillReview } from '../services/skillReview.js';
 
 const defaults = {
   review: async (...args: Parameters<typeof import('../services/jobReviewProvider.js').reviewJob>) => {
@@ -17,7 +18,8 @@ const defaults = {
 export function versionData(version: IResumeVersion) {
   return { profileId: version._id, revision: version.revision, ...version.content,
     label: version.label, jobDescription: version.jobDescription, baseRevision: version.baseRevision,
-    createdAt: version.createdAt, analysis: version.analysis ?? null, gapPlans: version.gapPlans ?? [], plansRevision: version.plansRevision ?? 0 };
+    createdAt: version.createdAt, skillNormalization: version.skillNormalization,
+    analysis: version.analysis ?? null, gapPlans: version.gapPlans ?? [], plansRevision: version.plansRevision ?? 0 };
 }
 function baseContent(profile: IProfile) {
   const plain = profile.toObject();
@@ -25,7 +27,7 @@ function baseContent(profile: IProfile) {
     education: plain.education, projects: plain.projects, skills: plain.skills });
 }
 
-export function createVersionRouter(deps = defaults) {
+export function createVersionRouter(deps = defaults, normalize = normalizationProvider) {
   const router = Router({ mergeParams: true });
   const aiLimit = rateLimit(10, 15 * 60 * 1000);
   // Per-process admission prevents multiple paid reviews for one account at once.
@@ -43,8 +45,8 @@ export function createVersionRouter(deps = defaults) {
     const base: IProfile = res.locals.profile;
     if ((base.revision ?? 0) !== expected) { res.status(409).json({ success: false, error: 'The base resume changed. Reload it before creating a version.' }); return; }
     const id = new Types.ObjectId();
-    const version = { _id: id, label, jobDescription, content: baseContent(base), baseRevision: expected, revision: 0, createdAt: new Date() };
-    if (!fitsVersionBudget(version.content, jobDescription)) throw new ResumeInputError('This job version is too large. Shorten the resume or job description.');
+    const version = { _id: id, label, jobDescription, content: baseContent(base), skillNormalization: base.skillNormalization, baseRevision: expected, revision: 0, createdAt: new Date() };
+    if (!fitsVersionBudget(version.content, jobDescription, undefined, undefined, version.skillNormalization)) throw new ResumeInputError('This job version is too large. Shorten the resume or job description.');
     const filter = expected === 0 ? { $or: [{ revision: 0 }, { revision: { $exists: false } }] } : { revision: expected };
     const updated = await Profile.findOneAndUpdate({ ...owner(res), ...filter,
       $expr: { $lt: [{ $size: { $ifNull: ['$versions', []] } }, 20] } },
@@ -66,12 +68,30 @@ export function createVersionRouter(deps = defaults) {
   router.put('/:versionId', async (req, res) => {
     const input = parseResumeSave(req.body);
     const v: IResumeVersion = res.locals.version;
-    if (!fitsVersionBudget(input.content, v.jobDescription, undefined, v.gapPlans)) throw new ResumeInputError('This job version is too large. Shorten the resume content or plan notes.');
+    if (v.revision !== input.revision) { res.status(409).json({ success: false, error: 'This job version changed. Your edits are still here; reload the saved version.' }); return; }
+    const skillNormalization = applySkillReviews(v.skillNormalization, input.skillReviews, input.content.skills);
+    if (!fitsVersionBudget(input.content, v.jobDescription, undefined, v.gapPlans, skillNormalization)) throw new ResumeInputError('This job version is too large. Shorten the resume content or plan notes.');
     const profile = await Profile.findOneAndUpdate({ ...owner(res), versions: { $elemMatch: { _id: v._id, revision: input.revision, ...plansCounter(v.plansRevision) } } },
-      { $set: { 'versions.$.content': input.content }, $inc: { 'versions.$.revision': 1 }, $unset: { 'versions.$.analysis': 1 } },
+      { $set: { 'versions.$.content': input.content, ...(skillNormalization ? { 'versions.$.skillNormalization': skillNormalization } : {}) }, $inc: { 'versions.$.revision': 1 }, $unset: { 'versions.$.analysis': 1 } },
       { returnDocument: 'after', runValidators: true, projection: projection(v._id) });
     if (!profile?.versions?.[0]) { res.status(409).json({ success: false, error: 'This job version changed. Your edits are still here; reload the saved version.' }); return; }
     res.json({ success: true, data: versionData(profile.toObject().versions![0]!) });
+  });
+  router.post('/:versionId/skills/normalize', aiLimit, async (req, res) => {
+    const body = inputObject(req.body, ['revision'], 'Skill review');
+    const expected = revision(body.revision);
+    const v: IResumeVersion = res.locals.version;
+    if (v.revision !== expected) { res.status(409).json({ success: false, error: 'This job version changed. Reload before reviewing skills.' }); return; }
+    const result = await withSkillReview(res.locals.userId, async () => {
+      const skillNormalization = await normalize(v.content.skills);
+      if (!fitsVersionBudget(v.content, v.jobDescription, undefined, v.gapPlans, skillNormalization)) throw new ResumeInputError('This job version is too large to save skill suggestions.');
+      return { profile: await Profile.findOneAndUpdate({ ...owner(res), versions: { $elemMatch: { _id: v._id, revision: expected, ...plansCounter(v.plansRevision) } } },
+        { $set: { 'versions.$.skillNormalization': skillNormalization }, $inc: { 'versions.$.revision': 1 }, $unset: { 'versions.$.analysis': 1 } },
+        { returnDocument: 'after', runValidators: true, projection: projection(v._id) }) };
+    });
+    if (!result) { res.status(429).json({ success: false, error: 'A skill review is already running. Wait for it to finish.' }); return; }
+    if (!result.profile?.versions?.[0]) { res.status(409).json({ success: false, error: 'This version or its plans changed during skill review. Reload before trying again.' }); return; }
+    res.json({ success: true, data: versionData(result.profile.toObject().versions![0]!) });
   });
   router.post('/:versionId/review', aiLimit, async (req, res) => {
     const body = inputObject(req.body, ['revision'], 'Review');
@@ -84,7 +104,7 @@ export function createVersionRouter(deps = defaults) {
     reviewing.add(userId);
     try {
       const result: JobReview = await deps.review(v.content, v.jobDescription, expected);
-      if (!fitsVersionBudget(v.content, v.jobDescription, result, v.gapPlans)) throw new JobReviewError('invalid_output');
+      if (!fitsVersionBudget(v.content, v.jobDescription, result, v.gapPlans, v.skillNormalization)) throw new JobReviewError('invalid_output');
       const saved = await Profile.updateOne({ ...owner(res), versions: { $elemMatch: { _id: v._id, revision: expected, ...plansCounter(v.plansRevision) } } },
         { $set: { 'versions.$.analysis': result } });
       if (!saved.matchedCount) { res.status(409).json({ success: false, error: 'The resume or plans changed during analysis. Discarded the stale review; reload and try again.' }); return; }

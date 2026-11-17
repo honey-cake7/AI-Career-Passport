@@ -1,5 +1,6 @@
 import { test, before, after, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { skillSnapshot } from '../src/services/skillReview.js';
 import type { Server } from 'node:http';
 import { Types } from 'mongoose';
 import { createApp } from '../src/app.js';
@@ -58,7 +59,7 @@ before(async () => {
   const app = createApp(createProfileRouter({
     parse: async () => { calls.parse++; return 'Synthetic resume text'; },
     extract: async () => extracted,
-    normalize: async () => ['TypeScript'],
+    normalize: async () => skillSnapshot(['TypeScript']),
     pdf: async () => { calls.pdf++; return Buffer.from('%PDF-test'); },
   }));
   server = app.listen(0, '127.0.0.1');

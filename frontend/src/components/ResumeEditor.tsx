@@ -1,9 +1,11 @@
 import { Fragment, useEffect, useId, useRef, useState, type FormEvent, type ChangeEvent, type ReactNode } from 'react';
 import { isAxiosError } from 'axios';
 import { apiClient } from '../api/axios';
-import type { IProfile, EditSuggestion } from '../types';
+import type { IProfile, EditSuggestion, SkillEntry } from '../types';
+import { SkillReview } from './SkillReview';
 
-type Content = Omit<IProfile, 'profileId' | 'revision'>;
+type Content = Pick<IProfile, 'personalInfo' | 'experiences' | 'education' | 'projects' | 'skills'>;
+const parseSkills = (text: string) => text.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
 function content(profile: IProfile): Content {
   const { personalInfo, experiences, education, projects, skills } = profile;
   return structuredClone({ personalInfo, experiences, education, projects, skills });
@@ -30,7 +32,8 @@ export function ResumeEditor({ profile, onSaved, onDeleted, onDirty, resourcePat
   const path = resourcePath ?? `/api/profile/${profile.profileId}`;
   const [draft, setDraft] = useState(() => content(profile));
   // Keep separators while typing instead of reparsing the field on every keystroke.
-  const [skills, setSkills] = useState(profile.skills.join(', '));
+  const [skills, setSkills] = useState(profile.skills.join('\n'));
+  const [skillEntries, setSkillEntries] = useState<SkillEntry[]>(() => structuredClone(profile.skillNormalization?.entries ?? []));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -41,7 +44,8 @@ export function ResumeEditor({ profile, onSaved, onDeleted, onDirty, resourcePat
   const mounted = useRef(true);
   const errorMessage = useRef<HTMLParagraphElement>(null);
   const editorForm = useRef<HTMLFormElement>(null);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(content(profile)) || skills !== profile.skills.join(', ');
+  const dirty = JSON.stringify(draft) !== JSON.stringify(content(profile)) || skills !== profile.skills.join('\n')
+    || JSON.stringify(skillEntries) !== JSON.stringify(profile.skillNormalization?.entries ?? []);
   useEffect(() => { onDirty(dirty || planDirty); }, [dirty, planDirty, onDirty]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (dirty || planDirty) { event.preventDefault(); event.returnValue = ''; } };
@@ -53,7 +57,7 @@ export function ResumeEditor({ profile, onSaved, onDeleted, onDirty, resourcePat
   useEffect(() => { if (error) errorMessage.current?.focus(); }, [error]);
 
   function reset(next: IProfile, refreshPanel = true) {
-    setDraft(content(next)); setSkills(next.skills.join(', ')); setConflict(false); setPdf('');
+    setDraft(content(next)); setSkills(next.skills.join('\n')); setSkillEntries(structuredClone(next.skillNormalization?.entries ?? [])); setConflict(false); setPdf('');
     if (refreshPanel) setPanelEpoch(x => x + 1);
   }
   async function save(event: FormEvent) {
@@ -61,15 +65,45 @@ export function ResumeEditor({ profile, onSaved, onDeleted, onDirty, resourcePat
     if (planDirty && !window.confirm('Save the resume and discard unsaved plan edits? Save your plan first to keep those notes.')) return;
     setBusy(true); setError(''); setNotice('');
     try {
-      const clean = { ...draft, skills: skills.split(',').map(x => x.trim()).filter(Boolean),
+      const clean = { ...draft, skills: parseSkills(skills),
         projects: draft.projects.map(p => ({ ...p, techStack: p.techStack.map(x => x.trim()).filter(Boolean) })) };
-      const response = await apiClient.put(path, { revision: profile.revision, content: clean });
+      const skillReviews = skillEntries.filter(entry => {
+        const saved = profile.skillNormalization?.entries.find(saved => saved.id === entry.id);
+        return entry.choice !== 'pending' && (entry.choice !== saved?.choice || entry.value !== saved?.value);
+      }).map(entry => ({ id: entry.id, choice: entry.choice, ...(entry.choice === 'custom' ? { value: entry.value } : {}) }));
+      const response = await apiClient.put(path, { revision: profile.revision, content: clean, ...(skillReviews.length ? { skillReviews } : {}) });
       if (!mounted.current) return;
       const next: IProfile = response.data.data;
       reset(next); onSaved(next); setNotice('Saved. Your PDF will use these details.');
     } catch (error) {
       if (!mounted.current) return;
       setError(message(error, 'Unable to save. Your edits are still here.'));
+      setConflict(isAxiosError(error) && error.response?.status === 409);
+    } finally { if (mounted.current) setBusy(false); }
+  }
+  function chooseSkill(id: string, choice: SkillEntry['choice'], value: string) {
+    const entry = skillEntries.find(entry => entry.id === id);
+    if (!entry || busy) return;
+    const values = parseSkills(skills);
+    const shared = skillEntries.some(other => other.id !== id && other.value === entry.value);
+    const next = shared ? values : values.filter(skill => skill !== entry.value);
+    if (!next.includes(value)) next.push(value);
+    setSkills(next.join('\n'));
+    setSkillEntries(entries => entries.map(entry => entry.id === id ? { ...entry, choice, value } : entry));
+    setPdf(''); setNotice('Skill wording added to your draft. Save changes when ready.');
+  }
+  async function reviewSkills() {
+    if (dirty || planDirty || busy) return;
+    if (profile.skillNormalization && !window.confirm('Refresh suggestions and replace previous skill review decisions? Your saved skill list will be kept.')) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const response = await apiClient.post(`${path}/skills/normalize`, { revision: profile.revision });
+      if (!mounted.current) return;
+      const next: IProfile = response.data.data;
+      reset(next); onSaved(next); setNotice('Skill suggestions saved. Review each name before using it.');
+    } catch (error) {
+      if (!mounted.current) return;
+      setError(message(error, 'Skill suggestions are unavailable. Your saved skills are unchanged.'));
       setConflict(isAxiosError(error) && error.response?.status === 409);
     } finally { if (mounted.current) setBusy(false); }
   }
@@ -142,7 +176,9 @@ export function ResumeEditor({ profile, onSaved, onDeleted, onDirty, resourcePat
             <Field title="LinkedIn URL" type="url" maxLength={1000} value={draft.personalInfo.linkedIn} onChange={v => personal('linkedIn', v)} />
             <Field title="Summary" sourceId="summary" maxLength={5000} multiline value={draft.personalInfo.summary} onChange={v => personal('summary', v)} />
           </section>
-          <section className="editor-section"><p className="section-number">02 / TOOLKIT</p><h2>Skills</h2><p className="hint">Separate skills with commas. Include skills you can discuss and demonstrate.</p><Field title="Your skills" maxLength={15000} multiline value={skills} onChange={setSkills} /></section>
+          <section className="editor-section"><p className="section-number">02 / TOOLKIT</p><h2>Skills</h2><p className="hint">One skill per line. Include skills you can discuss and demonstrate.</p><Field title="Your skills" maxLength={15150} multiline value={skills} onChange={setSkills} />
+            <SkillReview snapshot={profile.skillNormalization} entries={skillEntries} skills={parseSkills(skills)} blocked={busy || dirty || planDirty || conflict} onReview={() => void reviewSkills()} onChoose={chooseSkill} />
+          </section>
           <section className="editor-section"><p className="section-number">03 / EXPERIENCE</p><h2>Where you made a contribution</h2>
             {draft.experiences.map((item, i) => <article className="entry" key={i}><div className="entry-heading"><h3>Experience {i + 1}</h3><button type="button" onClick={() => removeItem('experiences', i)}>Remove experience {i + 1}</button></div>
               <div className="field-grid">{(['title', 'company', 'location', 'startDate', 'endDate'] as const).map(key => <Field key={key} title={{ title: 'Role', company: 'Company', location: 'Location', startDate: 'Start date', endDate: 'End date or Present' }[key]} required={key === 'title' || key === 'company'} value={item[key]} maxLength={key.includes('Date') ? 100 : 300} onChange={v => update('experiences', i, key, v)} />)}</div>
