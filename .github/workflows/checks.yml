@@ -47,6 +47,8 @@ jobs:
     timeout-minutes: 15
     env:
       NODE_ENV: test
+      # CPU binaries are bundled; avoid downloading optional CUDA libraries.
+      ONNXRUNTIME_NODE_INSTALL_CUDA: skip
       # The test preload also overrides credentials. All MongoDB instances are
       # created by MongoMemoryServer; this URI is deliberately unusable.
       MONGODB_URI: mongodb://127.0.0.1:1/not-used-by-tests
