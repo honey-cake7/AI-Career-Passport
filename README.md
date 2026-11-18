@@ -73,6 +73,10 @@ The existing `backend/docker-compose.yml` is a **development example**; its imag
 
 **Taxonomy seed caution:** `npm run seed:skills` currently deletes/recreates the configured Qdrant collection. Use a disposable local collection only. A non-destructive versioned seed is planned. Do not point this command at shared or production data.
 
+If another project uses the frontend port, set `VITE_DEV_PORT=5174` in `frontend/.env.local` and `FRONTEND_URL=http://localhost:5174` in the backend `.env`, then restart both servers. Open `http://localhost:5174`; switching to an IP literal changes the browser origin and can fail CORS. A configured dev port is strict, so Vite reports a collision instead of silently changing ports. These are local settings, not Vercel/Render changes.
+
+The MongoDB Windows service controls local MongoDB only. A `mongodb+srv://` URI uses Atlas independently. If Atlas SRV/TXT lookup fails with `ECONNREFUSED` while an alternate resolver succeeds, optional backend `DNS_SERVERS` accepts one to three comma-separated IP addresses for resolvers approved on your network. It changes only Node's DNS resolver, not OS settings, the database URI, authentication or TLS. Leave it blank when normal DNS works; it is not a fix for incorrect credentials, paused clusters or Atlas network access rules. Restart the backend after editing `.env`.
+
 ## Checks
 
 Backend:

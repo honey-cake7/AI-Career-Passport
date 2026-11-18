@@ -3,11 +3,13 @@ import 'dotenv/config';
 import app from './app.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
 import { startDeletionRecovery } from './services/accountDeletion.js';
+import { configureDnsServers } from './config/dns.js';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
 async function startServer(): Promise<void> {
   try {
+    configureDnsServers();
     // Connect to MongoDB
     await connectDatabase();
     const stopDeletionRecovery = startDeletionRecovery();
